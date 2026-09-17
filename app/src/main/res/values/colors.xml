@@ -1,0 +1,8 @@
+<resources>
+    <color name="mtl_bg">#0B0D12</color>
+    <color name="mtl_surface">#151922</color>
+    <color name="mtl_surface2">#202637</color>
+    <color name="mtl_text">#F4F6FB</color>
+    <color name="mtl_muted">#AEB7CA</color>
+    <color name="mtl_accent">#6D8CFF</color>
+</resources>
