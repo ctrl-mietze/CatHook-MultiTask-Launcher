@@ -1,0 +1,1 @@
+package com.catcore.ctrlmietze.multitask; import android.graphics.drawable.Drawable; public final class AppEntry { public final String label, packageName, activityName; public final Drawable icon; public AppEntry(String l,String p,String a,Drawable i){label=l;packageName=p;activityName=a;icon=i;} }
