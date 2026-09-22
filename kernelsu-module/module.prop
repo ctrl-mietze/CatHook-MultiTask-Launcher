@@ -1,6 +1,6 @@
 id=catcore_multitask_root
-name=CatCore MultiTask Root Helper
-version=2.0.0-dev4
-versionCode=20003
+name=CatCore MultiTask Optional Root Module
+version=2.0.0-dev7
+versionCode=20006
 author=CatCore / ctrl-mietze
-description=Optional systemless root broker for CatCore MultiTask V2 task sessions, process telemetry and temporary session priority.
+description=Optional systemless root module for CatCore MultiTask V2 root ActivityManager task creation, fallback sessions, telemetry and temporary session priority. Zygisk is detected when present but is not required.
