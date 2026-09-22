@@ -124,27 +124,58 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                 return;
             }
 
-            boolean showAnalysis = SettingsStore.compatibilityMode(activity);
-            if (showAnalysis) {
-                activity.showCompatibilityProgress("Resolving " + app.label + "…");
-            }
+            int desired = Math.max(1, Math.min(
+                    8, AppTaskRules.get(activity, app.packageName)));
 
-            TaskLauncher.Progress progress = showAnalysis
-                    ? activity::showCompatibilityProgress
-                    : null;
+            activity.showCompatibilityProgress(
+                    "LSPosed is preparing " + desired
+                            + (desired == 1 ? " task" : " tasks")
+                            + " for " + app.label + "…");
 
-            TaskLauncher.launchNewTask(
+            SystemTaskBridge.ensureTaskCount(
                     activity,
                     app.packageName,
                     app.activityName,
-                    progress,
-                    (ok, message) -> {
+                    desired,
+                    (ok, before, after, target, message) -> {
                         activity.hideCompatibilityProgress();
                         if (ok) {
-                            Toast.makeText(activity, "Opened " + app.label,
+                            Toast.makeText(
+                                    activity,
+                                    target == 1
+                                            ? "Opened " + app.label
+                                            : "Ready · " + after + "/" + target + " tasks",
                                     Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        if (SettingsStore.compatibilityMode(activity)) {
+                            activity.showCompatibilityProgress(
+                                    "Native LSPosed path failed · trying safe compatibility fallback…");
+                            TaskLauncher.launchNewTask(
+                                    activity,
+                                    app.packageName,
+                                    app.activityName,
+                                    activity::showCompatibilityProgress,
+                                    (fallbackOk, fallbackMessage) -> {
+                                        activity.hideCompatibilityProgress();
+                                        if (fallbackOk) {
+                                            Toast.makeText(
+                                                    activity,
+                                                    "Opened with compatibility fallback",
+                                                    Toast.LENGTH_SHORT).show();
+                                        } else {
+                                            activity.showLaunchFailure(
+                                                    app.label,
+                                                    message + "\n\nFallback: " + fallbackMessage);
+                                        }
+                                    });
                         } else {
-                            activity.showLaunchFailure(app.label, message);
+                            activity.showLaunchFailure(
+                                    app.label,
+                                    message
+                                            + "\n\nThe native LSPosed task bridge is the default V2 path. "
+                                            + "Enable Compatibility mode only if this app needs a fallback.");
                         }
                     });
         };
