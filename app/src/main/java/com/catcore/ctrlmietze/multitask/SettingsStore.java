@@ -37,6 +37,10 @@ public final class SettingsStore {
     private static final String K_AUTO_TRIM = "auto_trim";
     private static final String K_DEV_ACCEPTED = "developer_warning_accepted";
     private static final String K_RESTORE_WINDOWS = "restore_windows";
+    private static final String K_FULL_SCAN = "compat_full_scan";
+    private static final String K_MANUAL_PROCESS_TUNING = "manual_process_tuning";
+    private static final String K_BG_PROCESS_LIMIT = "background_process_limit";
+    private static final String K_EMPTY_PROCESS_PERCENT = "empty_process_percent";
 
     private SettingsStore() {}
 
@@ -64,6 +68,10 @@ public final class SettingsStore {
     public static boolean autoTrim(Context c) { return p(c).getBoolean(K_AUTO_TRIM, false); }
     public static boolean developerWarningAccepted(Context c) { return p(c).getBoolean(K_DEV_ACCEPTED, false); }
     public static boolean restoreWindows(Context c) { return p(c).getBoolean(K_RESTORE_WINDOWS, true); }
+    public static boolean fullScanMode(Context c) { return p(c).getBoolean(K_FULL_SCAN, false); }
+    public static boolean manualProcessTuning(Context c) { return p(c).getBoolean(K_MANUAL_PROCESS_TUNING, false); }
+    public static int backgroundProcessLimit(Context c) { return p(c).getInt(K_BG_PROCESS_LIMIT, 0); }
+    public static int emptyProcessPercent(Context c) { return p(c).getInt(K_EMPTY_PROCESS_PERCENT, 0); }
 
     public static void setCompatibilityMode(Context c, boolean value) { put(c, K_COMPAT, value); }
     public static void setMaxStability(Context c, boolean value) { put(c, K_STABILITY, value); }
@@ -78,6 +86,14 @@ public final class SettingsStore {
     public static void setAutoTrim(Context c, boolean value) { put(c, K_AUTO_TRIM, value); }
     public static void setDeveloperWarningAccepted(Context c, boolean value) { put(c, K_DEV_ACCEPTED, value); }
     public static void setRestoreWindows(Context c, boolean value) { put(c, K_RESTORE_WINDOWS, value); }
+    public static void setFullScanMode(Context c, boolean value) { put(c, K_FULL_SCAN, value); }
+    public static void setManualProcessTuning(Context c, boolean value) { put(c, K_MANUAL_PROCESS_TUNING, value); }
+    public static void setBackgroundProcessLimit(Context c, int value) {
+        p(c).edit().putInt(K_BG_PROCESS_LIMIT, clamp(value, 0, 64)).apply();
+    }
+    public static void setEmptyProcessPercent(Context c, int value) {
+        p(c).edit().putInt(K_EMPTY_PROCESS_PERCENT, clamp(value, 0, 100)).apply();
+    }
 
     public static void setStartMode(Context c, int mode) {
         p(c).edit().putInt(K_START_MODE,
