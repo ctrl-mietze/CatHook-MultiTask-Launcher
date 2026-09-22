@@ -458,12 +458,9 @@ public final class TaskManagerActivity extends AppCompatActivity {
         }
 
         exec.execute(() -> {
-            int kept = 0;
+            int keepTaskId = chooseTaskToKeep(tasks);
             for (TaskInspector.TaskInfo task : tasks) {
-                if (kept == 0 && task.displayId == 0) {
-                    kept++;
-                    continue;
-                }
+                if (task.taskId == keepTaskId) continue;
                 TaskInspector.removeTask(task.taskId);
             }
             runOnUiThread(() -> {
@@ -515,12 +512,9 @@ public final class TaskManagerActivity extends AppCompatActivity {
             for (List<TaskInspector.TaskInfo> tasks : grouped.values()) {
                 if (tasks.size() <= 1 && !hasSecondaryDisplay(tasks)) continue;
 
-                boolean keptPrimary = false;
+                int keepTaskId = chooseTaskToKeep(tasks);
                 for (TaskInspector.TaskInfo task : tasks) {
-                    if (!keptPrimary && task.displayId == 0) {
-                        keptPrimary = true;
-                        continue;
-                    }
+                    if (task.taskId == keepTaskId) continue;
                     TaskInspector.removeTask(task.taskId);
                 }
             }
@@ -530,6 +524,14 @@ public final class TaskManagerActivity extends AppCompatActivity {
                 refresh(true);
             });
         });
+    }
+
+    private static int chooseTaskToKeep(List<TaskInspector.TaskInfo> tasks) {
+        if (tasks == null || tasks.isEmpty()) return -1;
+        for (TaskInspector.TaskInfo task : tasks) {
+            if (task.displayId == 0) return task.taskId;
+        }
+        return tasks.get(0).taskId;
     }
 
     private static boolean hasSecondaryDisplay(List<TaskInspector.TaskInfo> tasks) {
