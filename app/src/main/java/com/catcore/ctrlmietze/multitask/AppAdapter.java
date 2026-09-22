@@ -114,8 +114,8 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                 }));
 
         View.OnClickListener launch = view -> {
-            if (!activity.isXposedActive()) {
-                activity.showXposedRequired();
+            if (!activity.isLaunchFrameworkReady()) {
+                activity.showFrameworkRequired();
                 return;
             }
 
