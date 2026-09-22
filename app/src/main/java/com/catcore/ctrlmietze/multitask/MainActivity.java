@@ -133,7 +133,7 @@ public final class MainActivity extends AppCompatActivity {
                 mine ? "Start as my task" : "Start as app's own task",
                 16, CatUi.TEXT, true));
         modeText.addView(CatUi.text(this,
-                mine ? "MultiTask-owned V2 session" : "Root + LSPosed native task chain",
+                mine ? "MultiTask-owned V2 session" : "LSPosed native system task bridge",
                 12, CatUi.MUTED, false));
 
         TextView modePill = CatUi.pill(this, "CHANGE", Color.rgb(51, 61, 86));
