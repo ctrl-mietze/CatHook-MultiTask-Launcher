@@ -88,30 +88,38 @@ public final class RootManagerActivity extends AppCompatActivity {
         addSection("ROOT TASK CONTROL");
 
         addSwitch("Root Helper",
-                "Uses the KernelSU helper for privileged task operations while MultiTask is active.",
+                "Master switch for the KernelSU broker. Advanced root-backed session features stay off until this is enabled.",
                 SettingsStore.rootHelperEnabled(this),
-                value -> SettingsStore.setRootHelperEnabled(this, value));
+                pluginInstalled,
+                value -> {
+                    SettingsStore.setRootHelperEnabled(this, value);
+                    build();
+                });
 
         addSwitch("Root Task Start",
                 "Starts Android ActivityManager commands through root for stronger task placement. "
                         + "The target app still keeps its own Android UID; it is not permanently turned into UID 0.",
                 SettingsStore.rootTaskStart(this),
+                pluginInstalled && SettingsStore.rootHelperEnabled(this),
                 value -> SettingsStore.setRootTaskStart(this, value));
 
         addSwitch("Session priority",
                 "Temporarily raises process scheduling priority and lowers oom_score_adj for active MultiTask sessions. "
                         + "The helper restores normal values when the session closes.",
                 SettingsStore.sessionPriority(this),
+                pluginInstalled && SettingsStore.rootHelperEnabled(this),
                 value -> SettingsStore.setSessionPriority(this, value));
 
         addSwitch("Root resource telemetry",
                 "Lets Task Manager read /proc data for more accurate process, RAM and CPU information.",
                 SettingsStore.rootTelemetry(this),
+                pluginInstalled && SettingsStore.rootHelperEnabled(this),
                 value -> SettingsStore.setRootTelemetry(this, value));
 
         addSwitch("Trim app after closing its last MultiTask window",
                 "Sends a temporary memory trim hint after the final managed task closes. It does not freeze or disable the app.",
                 SettingsStore.autoTrim(this),
+                pluginInstalled && SettingsStore.rootHelperEnabled(this),
                 value -> SettingsStore.setAutoTrim(this, value));
 
         Button test = CatUi.secondaryButton(this, "Test Root Helper");
@@ -134,19 +142,21 @@ public final class RootManagerActivity extends AppCompatActivity {
         root.addView(heading, p);
     }
 
-    private void addSwitch(String title, String subtitle, boolean checked, ToggleAction action) {
+    private void addSwitch(String title, String subtitle, boolean checked,
+                           boolean enabled, ToggleAction action) {
         LinearLayout card = CatUi.card(this);
         root.addView(card, CatUi.cardParams(this));
 
         SwitchCompat toggle = new SwitchCompat(this);
         toggle.setText(title);
-        toggle.setTextColor(CatUi.TEXT);
+        toggle.setTextColor(enabled ? CatUi.TEXT : CatUi.MUTED);
         toggle.setTextSize(16);
         toggle.setChecked(checked);
-        toggle.setEnabled(pluginInstalled);
+        toggle.setEnabled(enabled);
         card.addView(toggle, new LinearLayout.LayoutParams(-1, -2));
 
-        TextView hint = CatUi.text(this, subtitle, 12, CatUi.MUTED, false);
+        TextView hint = CatUi.text(this, subtitle, 12,
+                enabled ? CatUi.MUTED : Color.rgb(111, 121, 143), false);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
         hp.topMargin = dp(6);
         card.addView(hint, hp);
