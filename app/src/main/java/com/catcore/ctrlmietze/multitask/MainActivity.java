@@ -35,6 +35,12 @@ public final class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (SettingsStore.legacyEasyMode(this)) {
+            startActivity(new Intent(this, LegacyHomeActivity.class));
+            finish();
+            return;
+        }
+
         CatUi.applyWindow(this);
         if (SettingsStore.frameworkEnabled(this)) {
             try { CatCoreFrameworkService.start(this); } catch (Throwable ignored) {}
@@ -70,7 +76,7 @@ public final class MainActivity extends AppCompatActivity {
         sp.topMargin = dp(5);
         brand.addView(subtitle, sp);
 
-        TextView version = CatUi.pill(this, "V2 DEV7", Color.rgb(56, 65, 128));
+        TextView version = CatUi.pill(this, "V2 DEV8", Color.rgb(56, 65, 128));
         heroTop.addView(version, new LinearLayout.LayoutParams(dp(82), dp(34)));
 
         rootReady = EnvironmentProbe.hasRoot();
