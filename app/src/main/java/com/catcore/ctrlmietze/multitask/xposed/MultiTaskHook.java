@@ -1,6 +1,7 @@
 package com.catcore.ctrlmietze.multitask.xposed;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -23,6 +24,9 @@ import com.catcore.ctrlmietze.multitask.AppTaskRules;
 import com.catcore.ctrlmietze.multitask.EnvironmentProbe;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
 import com.catcore.ctrlmietze.multitask.window.WindowFramework;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -163,34 +167,130 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             int callingUid = Binder.getCallingUid();
             int userId = Math.max(0, callingUid / 100000);
             final Object user = resolveUserHandle(userId);
+            final String targetPackage = pkg;
+            final int targetCount = Math.max(1, Math.min(8, desired));
+            final Intent launchTemplate = new Intent(original);
             Handler handler = new Handler(context.getMainLooper());
 
-            for (int i = 1; i < desired; i++) {
-                Intent clone = new Intent(original);
-                reinforce(clone);
-                clone.putExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, true);
-                clone.putExtra(TaskLauncher.EXTRA_RULE_SPAWN, true);
-                int delay = 150 * i;
-
-                handler.postDelayed(() -> {
-                    try {
-                        XposedHelpers.callMethod(context, "startActivityAsUser", clone, user);
-                    } catch (Throwable hiddenApi) {
-                        try {
-                            clone.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            context.startActivity(clone);
-                        } catch (Throwable t) {
-                            XposedBridge.log("MultiTask V2 automatic task rule: " + t);
-                        }
-                    }
-                }, delay);
-            }
-
-            XposedBridge.log("MultiTask V2: scheduled " + desired
-                    + " tasks for normal launch of " + pkg);
+            // Let the original launcher start settle first. Then fill only the
+            // missing task count instead of blindly adding N-1 on every tap.
+            handler.postDelayed(() -> ensureAutomaticTaskCount(
+                    service,
+                    context,
+                    targetPackage,
+                    targetCount,
+                    launchTemplate,
+                    user,
+                    handler), 320L);
         } catch (Throwable t) {
             XposedBridge.log("MultiTask V2 task rule hook: " + t);
         }
+    }
+
+    private static void ensureAutomaticTaskCount(
+            Object service,
+            Context context,
+            String pkg,
+            int desired,
+            Intent template,
+            Object user,
+            Handler handler) {
+        int counted = countTasksForPackage(service, pkg);
+        int effectiveCurrent = counted < 0 ? 1 : Math.max(1, counted);
+        int missing = Math.max(0, desired - effectiveCurrent);
+
+        if (missing == 0) {
+            XposedBridge.log("MultiTask V2: task rule already satisfied for "
+                    + pkg + " (" + effectiveCurrent + "/" + desired + ")");
+            return;
+        }
+
+        for (int i = 0; i < missing; i++) {
+            Intent clone = new Intent(template);
+            reinforce(clone);
+            clone.putExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, true);
+            clone.putExtra(TaskLauncher.EXTRA_RULE_SPAWN, true);
+            int delay = 150 * i;
+
+            handler.postDelayed(() -> {
+                try {
+                    XposedHelpers.callMethod(context, "startActivityAsUser", clone, user);
+                } catch (Throwable hiddenApi) {
+                    try {
+                        clone.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        context.startActivity(clone);
+                    } catch (Throwable t) {
+                        XposedBridge.log("MultiTask V2 automatic task rule: " + t);
+                    }
+                }
+            }, delay);
+        }
+
+        XposedBridge.log("MultiTask V2: filling " + missing
+                + " missing task(s) for " + pkg + " toward " + desired);
+    }
+
+    private static int countTasksForPackage(Object service, String pkg) {
+        try {
+            Object root = XposedHelpers.getObjectField(service, "mRootWindowContainer");
+            AtomicInteger count = new AtomicInteger();
+
+            Consumer<Object> consumer = task -> {
+                try {
+                    if (pkg.equals(packageNameForTask(task))) {
+                        count.incrementAndGet();
+                    }
+                } catch (Throwable ignored) {
+                }
+            };
+
+            try {
+                XposedHelpers.callMethod(root, "forAllLeafTasks", consumer, true);
+            } catch (Throwable noLeafTraversal) {
+                XposedHelpers.callMethod(root, "forAllTasks", consumer, true);
+            }
+            return count.get();
+        } catch (Throwable t) {
+            XposedBridge.log("MultiTask V2 task count fallback for " + pkg + ": " + t);
+            return -1;
+        }
+    }
+
+    private static String packageNameForTask(Object task) {
+        for (String field : new String[]{"realActivity", "origActivity"}) {
+            try {
+                Object value = XposedHelpers.getObjectField(task, field);
+                if (value instanceof ComponentName) {
+                    return ((ComponentName) value).getPackageName();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        try {
+            Object top = XposedHelpers.callMethod(task, "getTopNonFinishingActivity");
+            if (top != null) {
+                Object value = XposedHelpers.getObjectField(top, "packageName");
+                if (value instanceof String) return (String) value;
+            }
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Object info = XposedHelpers.callMethod(task, "getTaskInfo");
+            for (String field : new String[]{"baseActivity", "topActivity", "origActivity", "realActivity"}) {
+                try {
+                    Object value = XposedHelpers.getObjectField(info, field);
+                    if (value instanceof ComponentName) {
+                        return ((ComponentName) value).getPackageName();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        return null;
     }
 
     private static Object resolveUserHandle(int userId) {
