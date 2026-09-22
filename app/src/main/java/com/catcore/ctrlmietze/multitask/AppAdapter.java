@@ -9,9 +9,10 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.catcore.ctrlmietze.multitask.window.WindowFramework;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -105,25 +106,11 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                 return;
             }
 
-            boolean showAnalysis = SettingsStore.compatibilityMode(activity);
-            if (showAnalysis) {
-                activity.showCompatibilityProgress("Preparing compatibility check…");
-            }
-
-            TaskLauncher.Progress progress = showAnalysis
-                    ? activity::showCompatibilityProgress
-                    : null;
-
-            TaskLauncher.launchNewTask(activity, app.packageName, app.activityName, progress,
-                    (ok, message) -> {
-                        activity.hideCompatibilityProgress();
-                        if (ok) {
-                            Toast.makeText(activity, "Opened " + app.label,
-                                    Toast.LENGTH_SHORT).show();
-                        } else {
-                            activity.showLaunchFailure(app.label, message);
-                        }
-                    });
+            WindowFramework.open(
+                    activity,
+                    app.packageName,
+                    app.activityName,
+                    app.label);
         };
 
         holder.play.setOnClickListener(launch);
