@@ -20,6 +20,8 @@ import java.util.concurrent.Executors;
 public final class TaskLauncher {
     public static final String EXTRA_FORCE_MULTITASK =
             "com.catcore.ctrlmietze.multitask.FORCE_MULTITASK";
+    public static final String EXTRA_MAX_STABILITY =
+            "com.catcore.ctrlmietze.multitask.MAX_STABILITY";
 
     public interface Callback {
         void onResult(boolean ok, String message);
@@ -244,7 +246,11 @@ public final class TaskLauncher {
 
     private static LaunchResult runStrategy(Context context, String strategy, String pkg,
                                             String component, boolean childTasks) {
+        boolean maxStability = SettingsStore.maxStability(context);
         String marker = " --ez " + EXTRA_FORCE_MULTITASK + " true";
+        if (maxStability) {
+            marker += " --ez " + EXTRA_MAX_STABILITY + " true";
+        }
         String child = childTasks ? " --activity-task-on-home" : "";
         String full = " --activity-new-task --activity-multiple-task"
                 + " --activity-new-document --activity-retain-in-recents" + child;
@@ -287,6 +293,7 @@ public final class TaskLauncher {
                 intent.setComponent(ComponentName.unflattenFromString(component));
                 addFullFlags(intent, childTasks);
                 intent.putExtra(EXTRA_FORCE_MULTITASK, true);
+                intent.putExtra(EXTRA_MAX_STABILITY, maxStability);
                 context.startActivity(intent);
                 return new LaunchResult(true, "Started.");
             } catch (Throwable t) {
@@ -300,6 +307,7 @@ public final class TaskLauncher {
                 if (intent == null) return new LaunchResult(false, "No launch intent.");
                 addFullFlags(intent, childTasks);
                 intent.putExtra(EXTRA_FORCE_MULTITASK, true);
+                intent.putExtra(EXTRA_MAX_STABILITY, maxStability);
                 context.startActivity(intent);
                 return new LaunchResult(true, "Started.");
             } catch (Throwable t) {
