@@ -3,6 +3,7 @@ package com.catcore.ctrlmietze.multitask;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -172,14 +173,107 @@ public final class SettingsActivity extends AppCompatActivity {
         xp.topMargin = dp(10);
         xposed.addView(xText, xp);
 
-        addSection("ROOT MANAGER");
-        Button rootManager = CatUi.primaryButton(this,
-                RootPluginManager.isInstalled()
-                        ? "Root Manager · plugin connected"
-                        : "Root Manager · optional plugin");
-        root.addView(rootManager, buttonParams());
-        rootManager.setOnClickListener(v ->
-                startActivity(new Intent(this, RootManagerActivity.class)));
+        addSection("ROOT");
+        boolean pluginInstalled = EnvironmentProbe.hasRoot()
+                && RootPluginManager.isInstalled();
+
+        LinearLayout rootStatus = CatUi.card(this);
+        rootStatus.setBackground(CatUi.stroke(
+                this,
+                pluginInstalled ? Color.rgb(21, 47, 42) : CatUi.SURFACE,
+                22,
+                pluginInstalled ? Color.rgb(46, 132, 108) : Color.rgb(55, 63, 82)));
+        root.addView(rootStatus, CatUi.cardParams(this));
+
+        LinearLayout rootHeader = new LinearLayout(this);
+        rootHeader.setGravity(Gravity.CENTER_VERTICAL);
+        rootStatus.addView(rootHeader);
+
+        rootHeader.addView(CatUi.text(
+                this,
+                pluginInstalled ? "Optional Root Helper connected" : "Optional Root Helper",
+                16, CatUi.TEXT, true),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        rootHeader.addView(CatUi.pill(
+                this,
+                pluginInstalled ? "READY" : "OPTIONAL",
+                pluginInstalled ? Color.rgb(34, 96, 78) : Color.rgb(52, 59, 78)));
+
+        TextView rootInfo = CatUi.text(
+                this,
+                pluginInstalled
+                        ? "Advanced root-backed session controls are available. They remain optional and session-based."
+                        : "MultiTask V2 works without the KernelSU helper. Install it only if you want extra root-backed session controls.",
+                12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams rip = new LinearLayout.LayoutParams(-1, -2);
+        rip.topMargin = dp(8);
+        rootStatus.addView(rootInfo, rip);
+
+        if (!pluginInstalled) {
+            Button helperBuilds = CatUi.secondaryButton(this, "Open Root Helper builds");
+            LinearLayout.LayoutParams hbp = new LinearLayout.LayoutParams(-1, dp(48));
+            hbp.topMargin = dp(12);
+            rootStatus.addView(helperBuilds, hbp);
+            helperBuilds.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://github.com/ctrl-mietze/CatHook-MultiTask-Launcher/actions/workflows/kernelsu-helper.yml")));
+                } catch (Throwable ignored) {
+                }
+            });
+        }
+
+        addSwitch(
+                "Root Helper",
+                "Master switch for the optional KernelSU broker.",
+                SettingsStore.rootHelperEnabled(this),
+                pluginInstalled,
+                value -> {
+                    SettingsStore.setRootHelperEnabled(this, value);
+                    build();
+                });
+
+        boolean rootFeatures = pluginInstalled && SettingsStore.rootHelperEnabled(this);
+
+        addSwitch(
+                "Root Task Start",
+                "Compatibility-only root ActivityManager fallback. The LSPosed system bridge remains the normal V2 own-task path.",
+                SettingsStore.rootTaskStart(this),
+                rootFeatures,
+                value -> SettingsStore.setRootTaskStart(this, value));
+
+        addSwitch(
+                "Session priority",
+                "Temporarily adjusts nice/oom values while a MultiTask session is live and restores them afterwards.",
+                SettingsStore.sessionPriority(this),
+                rootFeatures,
+                value -> SettingsStore.setSessionPriority(this, value));
+
+        addSwitch(
+                "Root resource telemetry",
+                "Lets Task Manager use the optional root broker for additional process telemetry.",
+                SettingsStore.rootTelemetry(this),
+                rootFeatures,
+                value -> SettingsStore.setRootTelemetry(this, value));
+
+        addSwitch(
+                "Trim after last managed window",
+                "Requests a memory trim after the final MultiTask window for that app closes.",
+                SettingsStore.autoTrim(this),
+                rootFeatures,
+                value -> SettingsStore.setAutoTrim(this, value));
+
+        if (pluginInstalled) {
+            Button testRoot = CatUi.secondaryButton(this, "Test Root Helper");
+            root.addView(testRoot, buttonParams());
+            testRoot.setOnClickListener(v ->
+                    RootPluginManager.runAsync("status", null,
+                            (ok, message) -> Toast.makeText(
+                                    this,
+                                    ok ? "Root Helper ready" : message,
+                                    Toast.LENGTH_LONG).show()));
+        }
 
         addSection("MAINTENANCE");
         Button clear = CatUi.secondaryButton(this, "Clear learned app start methods");
@@ -295,17 +389,24 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private void addSwitch(String title, String subtitle, boolean checked, ToggleAction action) {
+        addSwitch(title, subtitle, checked, true, action);
+    }
+
+    private void addSwitch(String title, String subtitle, boolean checked,
+                           boolean enabled, ToggleAction action) {
         LinearLayout card = CatUi.card(this);
         root.addView(card, CatUi.cardParams(this));
 
         SwitchCompat toggle = new SwitchCompat(this);
         toggle.setText(title);
-        toggle.setTextColor(CatUi.TEXT);
+        toggle.setTextColor(enabled ? CatUi.TEXT : CatUi.MUTED);
         toggle.setTextSize(16);
         toggle.setChecked(checked);
+        toggle.setEnabled(enabled);
         card.addView(toggle);
 
-        TextView hint = CatUi.text(this, subtitle, 12, CatUi.MUTED, false);
+        TextView hint = CatUi.text(this, subtitle, 12,
+                enabled ? CatUi.MUTED : Color.rgb(105, 116, 139), false);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
         hp.topMargin = dp(6);
         card.addView(hint, hp);
