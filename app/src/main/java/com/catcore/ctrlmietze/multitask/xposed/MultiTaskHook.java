@@ -15,6 +15,7 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.ResultReceiver;
 import android.os.UserHandle;
 import android.os.SystemClock;
 import android.provider.Settings;
@@ -31,6 +32,7 @@ import android.widget.TextView;
 import com.catcore.ctrlmietze.multitask.AppTaskRules;
 import com.catcore.ctrlmietze.multitask.EnvironmentProbe;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
+import com.catcore.ctrlmietze.multitask.SystemTaskBridge;
 import com.catcore.ctrlmietze.multitask.window.FrameworkInputBridge;
 import com.catcore.ctrlmietze.multitask.window.WindowFramework;
 
@@ -49,6 +51,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
     private static volatile long stabilityWindowUntil;
     private static volatile long lastSystemHeartbeatWrite;
     private static volatile boolean frameworkBridgeRegistered;
+    private static volatile boolean systemTaskBridgeRegistered;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -96,6 +99,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) {
                     markSystemHookActive(param.thisObject);
                     registerFrameworkInputBridge(param.thisObject);
+                    registerSystemTaskBridge(param.thisObject);
                 }
             });
 
@@ -104,6 +108,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                 protected void beforeHookedMethod(MethodHookParam param) {
                     markSystemHookActive(param.thisObject);
                     registerFrameworkInputBridge(param.thisObject);
+                    registerSystemTaskBridge(param.thisObject);
 
                     for (Object arg : param.args) {
                         if (!(arg instanceof Intent)) continue;
@@ -126,6 +131,227 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log("MultiTask framework hook: " + t);
         }
+    }
+
+    private static void registerSystemTaskBridge(Object service) {
+        if (systemTaskBridgeRegistered) return;
+
+        synchronized (MultiTaskHook.class) {
+            if (systemTaskBridgeRegistered) return;
+
+            try {
+                Context context = (Context) XposedHelpers.getObjectField(service, "mContext");
+                IntentFilter filter = new IntentFilter(SystemTaskBridge.ACTION);
+                Handler handler = new Handler(context.getMainLooper());
+
+                BroadcastReceiver receiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context receiverContext, Intent intent) {
+                        if (intent == null
+                                || !SystemTaskBridge.ACTION.equals(intent.getAction())) {
+                            return;
+                        }
+
+                        try {
+                            handleSystemTaskRequest(
+                                    service, receiverContext, handler, intent);
+                        } catch (Throwable t) {
+                            XposedBridge.log("MultiTask V2 native task bridge: " + t);
+                            sendTaskBridgeResult(
+                                    resultReceiver(intent),
+                                    SystemTaskBridge.RESULT_ERROR,
+                                    -1, -1,
+                                    intent.getIntExtra("desired", 1),
+                                    "System task bridge failed: " + t);
+                        }
+                    }
+                };
+
+                if (Build.VERSION.SDK_INT >= 33) {
+                    context.registerReceiver(
+                            receiver,
+                            filter,
+                            FrameworkInputBridge.PERMISSION,
+                            handler,
+                            Context.RECEIVER_EXPORTED);
+                } else {
+                    context.registerReceiver(
+                            receiver,
+                            filter,
+                            FrameworkInputBridge.PERMISSION,
+                            handler);
+                }
+
+                systemTaskBridgeRegistered = true;
+                XposedBridge.log(
+                        "MultiTask V2: LSPosed native system task bridge active");
+            } catch (Throwable t) {
+                XposedBridge.log("MultiTask V2 task bridge registration: " + t);
+            }
+        }
+    }
+
+    private static void handleSystemTaskRequest(
+            Object service,
+            Context context,
+            Handler handler,
+            Intent request) {
+        ResultReceiver result = resultReceiver(request);
+        String pkg = request.getStringExtra("package");
+        String activity = request.getStringExtra("activity");
+        int desired = Math.max(1, Math.min(8, request.getIntExtra("desired", 1)));
+        int userId = Math.max(0, request.getIntExtra("user_id", 0));
+
+        if (!validPackageName(pkg)) {
+            sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+                    -1, -1, desired, "Invalid package name.");
+            return;
+        }
+
+        int before = countTasksForPackage(service, pkg);
+        if (before < 0) {
+            sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+                    -1, -1, desired,
+                    "Android task state could not be read safely. No launch was attempted.");
+            return;
+        }
+
+        Intent base = resolveBridgeLaunchIntent(context, pkg, activity);
+        if (base == null || base.getComponent() == null) {
+            sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+                    before, before, desired,
+                    "No launcher activity could be resolved for " + pkg + ".");
+            return;
+        }
+
+        final Object user = resolveUserHandle(userId);
+
+        if (before >= desired) {
+            Intent focus = new Intent(base);
+            focus.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            focus.putExtra(TaskLauncher.EXTRA_RULE_SPAWN, true);
+            try {
+                XposedHelpers.callMethod(context, "startActivityAsUser", focus, user);
+                sendTaskBridgeResult(result, SystemTaskBridge.RESULT_OK,
+                        before, before, desired,
+                        "Task target already satisfied (" + before + "/" + desired
+                                + "). Existing task brought forward.");
+            } catch (Throwable t) {
+                sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+                        before, before, desired,
+                        "Task target is satisfied, but Android could not focus it: " + t);
+            }
+            return;
+        }
+
+        int missing = desired - before;
+        for (int i = 0; i < missing; i++) {
+            Intent clone = new Intent(base);
+            reinforce(clone);
+            clone.putExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, true);
+            clone.putExtra(TaskLauncher.EXTRA_RULE_SPAWN, true);
+
+            int delay = i * 190;
+            handler.postDelayed(() -> {
+                try {
+                    XposedHelpers.callMethod(
+                            context, "startActivityAsUser", clone, user);
+                } catch (Throwable t) {
+                    XposedBridge.log(
+                            "MultiTask V2 native task start for " + pkg + ": " + t);
+                }
+            }, delay);
+        }
+
+        handler.postDelayed(() -> {
+            int after = countTasksForPackage(service, pkg);
+            boolean ok = after >= desired;
+            sendTaskBridgeResult(
+                    result,
+                    ok ? SystemTaskBridge.RESULT_OK : SystemTaskBridge.RESULT_ERROR,
+                    before,
+                    after,
+                    desired,
+                    ok
+                            ? "LSPosed system task bridge reached "
+                                    + after + "/" + desired + " tasks."
+                            : "Android created only "
+                                    + Math.max(0, after) + "/" + desired
+                                    + " tasks. The app's launchMode/task affinity may prevent more.");
+        }, missing * 190L + 650L);
+    }
+
+    private static Intent resolveBridgeLaunchIntent(
+            Context context, String pkg, String activity) {
+        try {
+            if (activity != null && !activity.trim().isEmpty()) {
+                ComponentName component = activity.contains("/")
+                        ? ComponentName.unflattenFromString(activity)
+                        : new ComponentName(pkg, activity);
+                if (component != null) {
+                    return new Intent(Intent.ACTION_MAIN)
+                            .addCategory(Intent.CATEGORY_LAUNCHER)
+                            .setComponent(component);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Intent launch = context.getPackageManager().getLaunchIntentForPackage(pkg);
+            if (launch != null) return launch;
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Intent query = new Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                    .setPackage(pkg);
+            ResolveInfo info = context.getPackageManager().resolveActivity(
+                    query, PackageManager.MATCH_DEFAULT_ONLY);
+            if (info != null && info.activityInfo != null) {
+                return new Intent(query).setComponent(new ComponentName(
+                        info.activityInfo.packageName, info.activityInfo.name));
+            }
+        } catch (Throwable ignored) {
+        }
+
+        return null;
+    }
+
+    private static ResultReceiver resultReceiver(Intent intent) {
+        try {
+            Object value = intent.getParcelableExtra("result");
+            return value instanceof ResultReceiver ? (ResultReceiver) value : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static void sendTaskBridgeResult(
+            ResultReceiver result,
+            int code,
+            int before,
+            int after,
+            int desired,
+            String message) {
+        if (result == null) return;
+
+        Bundle data = new Bundle();
+        data.putInt("before", before);
+        data.putInt("after", after);
+        data.putInt("desired", desired);
+        data.putString("message", message == null ? "" : message);
+        try {
+            result.send(code, data);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static boolean validPackageName(String pkg) {
+        return pkg != null
+                && pkg.length() <= 255
+                && pkg.matches("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+");
     }
 
     private static void registerFrameworkInputBridge(Object service) {
