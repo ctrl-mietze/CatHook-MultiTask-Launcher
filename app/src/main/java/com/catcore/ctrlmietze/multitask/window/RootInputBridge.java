@@ -47,7 +47,7 @@ final class RootInputBridge {
         float x = Math.max(0f, Math.min(contentWidth - 1f, event.getX()));
         float y = Math.max(0f, Math.min(contentHeight - 1f, event.getY()));
         String command = String.format(Locale.US,
-                "input touchscreen -d %d motionevent %s %.1f %.1f",
+                "input -d %d touchscreen motionevent %s %.1f %.1f",
                 displayId, verb, x, y);
 
         io.execute(() -> write(command));
