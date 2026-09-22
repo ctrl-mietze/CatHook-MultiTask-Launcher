@@ -41,6 +41,7 @@ public final class SettingsStore {
     private static final String K_MANUAL_PROCESS_TUNING = "manual_process_tuning";
     private static final String K_BG_PROCESS_LIMIT = "background_process_limit";
     private static final String K_EMPTY_PROCESS_PERCENT = "empty_process_percent";
+    private static final String K_LEGACY_EASY = "legacy_easy_mode";
 
     private SettingsStore() {}
 
@@ -72,6 +73,7 @@ public final class SettingsStore {
     public static boolean manualProcessTuning(Context c) { return p(c).getBoolean(K_MANUAL_PROCESS_TUNING, false); }
     public static int backgroundProcessLimit(Context c) { return p(c).getInt(K_BG_PROCESS_LIMIT, 0); }
     public static int emptyProcessPercent(Context c) { return p(c).getInt(K_EMPTY_PROCESS_PERCENT, 0); }
+    public static boolean legacyEasyMode(Context c) { return p(c).getBoolean(K_LEGACY_EASY, false); }
 
     public static void setCompatibilityMode(Context c, boolean value) { put(c, K_COMPAT, value); }
     public static void setMaxStability(Context c, boolean value) { put(c, K_STABILITY, value); }
@@ -90,6 +92,10 @@ public final class SettingsStore {
     public static void setManualProcessTuning(Context c, boolean value) { put(c, K_MANUAL_PROCESS_TUNING, value); }
     public static void setBackgroundProcessLimit(Context c, int value) {
         p(c).edit().putInt(K_BG_PROCESS_LIMIT, clamp(value, 0, 64)).apply();
+    }
+    public static void setLegacyEasyMode(Context c, boolean value) {
+        put(c, K_LEGACY_EASY, value);
+        if (value) setStartMode(c, MODE_APP_OWN_TASK);
     }
     public static void setEmptyProcessPercent(Context c, int value) {
         p(c).edit().putInt(K_EMPTY_PROCESS_PERCENT, clamp(value, 0, 100)).apply();
