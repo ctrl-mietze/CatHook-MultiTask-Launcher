@@ -1,6 +1,7 @@
 package com.catcore.ctrlmietze.multitask;
 
 import android.app.Dialog;
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -15,7 +16,7 @@ import android.widget.TextView;
 public final class CatDialog {
     private CatDialog() {}
 
-    public static Dialog show(Context context, String eyebrow, String title, String message,
+    public static Dialog show(Activity context, String eyebrow, String title, String message,
                               String negative, String positive, Runnable onPositive) {
         Dialog d = base(context);
         LinearLayout card = card(context);
@@ -54,7 +55,7 @@ public final class CatDialog {
         return d;
     }
 
-    public static Dialog selector(Context context, String title, String[] labels, int selected,
+    public static Dialog selector(Activity context, String title, String[] labels, int selected,
                                   Choice choice) {
         Dialog d=base(context);
         LinearLayout card=card(context);
@@ -86,14 +87,14 @@ public final class CatDialog {
         d.setContentView(card); size(d); d.show(); size(d); return d;
     }
 
-    private static Dialog base(Context c){
+    private static Dialog base(Activity c){
         Dialog d=new Dialog(c);
         d.requestWindowFeature(Window.FEATURE_NO_TITLE);
         Window w=d.getWindow();
         if(w!=null){w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);}
         return d;
     }
-    private static LinearLayout card(Context c){
+    private static LinearLayout card(Activity c){
         LinearLayout x=CatUi.card(c); x.setPadding(dp(c,22),dp(c,22),dp(c,22),dp(c,20));
         x.setBackground(CatUi.stroke(c,Color.rgb(17,22,39),28,Color.rgb(64,77,126))); return x;
     }
