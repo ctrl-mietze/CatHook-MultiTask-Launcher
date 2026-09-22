@@ -1,0 +1,299 @@
+package com.catcore.ctrlmietze.multitask;
+
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.text.InputType;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.text.Collator;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public final class AppStarterActivity extends AppCompatActivity {
+    private volatile boolean rootReady;
+    private AlertDialog compatibilityDialog;
+    private TextView compatibilityText;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        CatUi.applyWindow(this);
+        rootReady = EnvironmentProbe.hasRoot();
+
+        List<AppEntry> apps = loadApps();
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(16), dp(16), dp(16), 0);
+        root.setBackground(CatUi.background());
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(header);
+
+        Button back = CatUi.secondaryButton(this, "‹");
+        header.addView(back, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        back.setOnClickListener(v -> finish());
+
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1);
+        tp.leftMargin = dp(12);
+        header.addView(titles, tp);
+
+        titles.addView(CatUi.text(this, "App Starter", 28, CatUi.TEXT, true));
+        titles.addView(CatUi.text(this,
+                "Choose an app and its exact task target",
+                12, CatUi.MUTED, false));
+
+        TextView count = CatUi.pill(this,
+                String.valueOf(apps.size()), Color.rgb(48, 57, 82));
+        header.addView(count, new LinearLayout.LayoutParams(dp(58), dp(34)));
+
+        LinearLayout info = CatUi.card(this);
+        info.setBackground(CatUi.dashboard(this));
+        LinearLayout.LayoutParams ip = CatUi.cardParams(this);
+        ip.topMargin = dp(14);
+        root.addView(info, ip);
+
+        info.addView(CatUi.text(this,
+                "Start apps your way", 18, CatUi.TEXT, true));
+        TextView hint = CatUi.text(this,
+                "Tap ×1…×8 to set the target task count, then START. "
+                        + "The selected V2 mode is used automatically.",
+                12, Color.rgb(194, 205, 231), false);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.topMargin = dp(5);
+        info.addView(hint, hp);
+
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Search apps or packages");
+        search.setTextColor(CatUi.TEXT);
+        search.setHintTextColor(Color.rgb(118, 131, 156));
+        search.setTextSize(14);
+        search.setPadding(dp(16), 0, dp(16), 0);
+        search.setBackground(CatUi.stroke(
+                this, CatUi.SURFACE, 18, Color.rgb(42, 49, 69)));
+        LinearLayout.LayoutParams searchParams =
+                new LinearLayout.LayoutParams(-1, dp(52));
+        searchParams.topMargin = dp(12);
+        searchParams.bottomMargin = dp(4);
+        root.addView(search, searchParams);
+
+        RecyclerView list = new RecyclerView(this);
+        list.setLayoutManager(new LinearLayoutManager(this));
+        list.setClipToPadding(false);
+        list.setPadding(0, dp(2), 0, dp(20));
+        root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        setContentView(root);
+
+        AppAdapter adapter = new AppAdapter(this, apps);
+        list.setAdapter(adapter);
+
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                adapter.filter(s == null ? "" : s.toString());
+            }
+            public void afterTextChanged(android.text.Editable editable) {}
+        });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        new Thread(() -> rootReady = EnvironmentProbe.hasRoot(), "CatCore-root-probe").start();
+    }
+
+    public boolean isLaunchFrameworkReady() {
+        if (!rootReady) rootReady = EnvironmentProbe.hasRoot();
+        return rootReady
+                && EnvironmentProbe.isXposedActive()
+                && EnvironmentProbe.isSystemHookActive(this);
+    }
+
+    public void showFrameworkRequired() {
+        boolean xposed = EnvironmentProbe.isXposedActive();
+        boolean systemHook = EnvironmentProbe.isSystemHookActive(this);
+        int targetStep = !rootReady ? 1 : (!xposed ? 2 : 3);
+
+        String title;
+        String message;
+
+        if (!rootReady) {
+            title = "Root access required";
+            message = "MultiTask no longer has an active root grant. Re-enable it in your root manager and verify it in setup.";
+        } else if (!xposed) {
+            title = "LSPosed activation required";
+            message = "MultiTask's built-in LSPosed module is not active. Enable MultiTask and keep MultiTask + System Framework in scope.";
+        } else if (!systemHook) {
+            title = "System hook required";
+            message = "The current system_server does not contain the matching MultiTask hook. Open setup and use Soft reboot after checking the System Framework scope.";
+        } else {
+            title = "Framework unavailable";
+            message = "MultiTask could not verify the current launch framework.";
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setNegativeButton("Close", null)
+                .setPositiveButton("Open setup", (d, w) -> {
+                    SettingsStore.setOnboardingComplete(this, false);
+                    getSharedPreferences("multitask_first_start", MODE_PRIVATE)
+                            .edit().putInt("step", targetStep).apply();
+                    Intent i = new Intent(this, FirstStartActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                                    | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                    finishAffinity();
+                })
+                .show();
+    }
+
+    public void showCompatibilityProgress(String message) {
+        if (compatibilityDialog == null) {
+            LinearLayout box = new LinearLayout(this);
+            box.setGravity(Gravity.CENTER_VERTICAL);
+            box.setPadding(dp(20), dp(16), dp(20), dp(16));
+
+            ProgressBar progress = new ProgressBar(this);
+            box.addView(progress, new LinearLayout.LayoutParams(dp(32), dp(32)));
+
+            compatibilityText = CatUi.text(this, message, 13, CatUi.TEXT, false);
+            LinearLayout.LayoutParams textParams =
+                    new LinearLayout.LayoutParams(0, -2, 1);
+            textParams.leftMargin = dp(14);
+            box.addView(compatibilityText, textParams);
+
+            compatibilityDialog = new AlertDialog.Builder(this)
+                    .setTitle("Compatibility analysis")
+                    .setView(box)
+                    .setCancelable(false)
+                    .create();
+            compatibilityDialog.show();
+        } else if (compatibilityText != null) {
+            compatibilityText.setText(message);
+        }
+    }
+
+    public void hideCompatibilityProgress() {
+        if (compatibilityDialog != null) {
+            compatibilityDialog.dismiss();
+            compatibilityDialog = null;
+            compatibilityText = null;
+        }
+    }
+
+    public void showLaunchFailure(String appName, String message) {
+        hideCompatibilityProgress();
+        new AlertDialog.Builder(this)
+                .setTitle("Couldn’t open " + appName)
+                .setMessage(message)
+                .setNegativeButton("Close", null)
+                .setPositiveButton("Open settings", (d, w) ->
+                        startActivity(new Intent(this, SettingsActivity.class)))
+                .show();
+    }
+
+    public void askTaskRule(AppEntry app, Runnable onChanged) {
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(AppTaskRules.get(this, app.packageName)));
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(20), dp(8), dp(20), dp(8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Exact task target")
+                .setMessage("How many tasks should exist when you press START for "
+                        + app.label + "?")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Apply", null)
+                .create();
+
+        dialog.setOnShowListener(x ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                        .setOnClickListener(v -> {
+                            int value;
+                            try {
+                                value = Integer.parseInt(
+                                        input.getText().toString().trim());
+                            } catch (Throwable t) {
+                                value = 0;
+                            }
+
+                            if (value < 1 || value > 8) {
+                                input.setError("Choose 1–8");
+                                return;
+                            }
+
+                            AppTaskRules.set(this, app.packageName, value);
+                            dialog.dismiss();
+                            if (onChanged != null) onChanged.run();
+                        }));
+
+        dialog.show();
+    }
+
+    private List<AppEntry> loadApps() {
+        PackageManager pm = getPackageManager();
+        Intent query = new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER);
+        Map<String, AppEntry> unique = new LinkedHashMap<>();
+
+        for (ResolveInfo info : pm.queryIntentActivities(
+                query, PackageManager.MATCH_ALL)) {
+            if (info.activityInfo == null) continue;
+            ApplicationInfo ai = info.activityInfo.applicationInfo;
+            if (getPackageName().equals(ai.packageName)) continue;
+
+            boolean system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+            if (system && !SystemAppAllowlist.isAllowed(ai.packageName)) continue;
+
+            String activity = info.activityInfo.name;
+            try {
+                Intent launch = pm.getLaunchIntentForPackage(ai.packageName);
+                if (launch != null && launch.getComponent() != null) {
+                    activity = launch.getComponent().getClassName();
+                }
+            } catch (Throwable ignored) {
+            }
+
+            CharSequence label = info.loadLabel(pm);
+            AppEntry entry = new AppEntry(
+                    label == null ? ai.packageName : label.toString(),
+                    ai.packageName,
+                    activity,
+                    info.loadIcon(pm));
+            unique.putIfAbsent(ai.packageName, entry);
+        }
+
+        ArrayList<AppEntry> out = new ArrayList<>(unique.values());
+        Collator collator = Collator.getInstance();
+        out.sort((a, b) -> collator.compare(a.label, b.label));
+        return out;
+    }
+
+    private int dp(int value) {
+        return CatUi.dp(this, value);
+    }
+}
