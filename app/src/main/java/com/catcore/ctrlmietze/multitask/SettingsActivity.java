@@ -107,6 +107,12 @@ public final class SettingsActivity extends AppCompatActivity {
             }
         });
 
+        addSwitch(
+                "Restore live workspace after process death",
+                "Keeps only app/window session metadata in app preferences. Virtual displays themselves are recreated; no Android system files are modified.",
+                SettingsStore.restoreWindows(this),
+                value -> SettingsStore.setRestoreWindows(this, value));
+
         addSection("COMPATIBILITY");
         addSwitch(
                 "Compatibility mode",
