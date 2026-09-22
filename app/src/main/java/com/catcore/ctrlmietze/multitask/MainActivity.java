@@ -42,7 +42,7 @@ public final class MainActivity extends AppCompatActivity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(16), dp(16), dp(18));
+        root.setPadding(dp(16), dp(22), dp(16), dp(18));
         root.setBackground(CatUi.background());
 
         LinearLayout hero = CatUi.card(this);
@@ -70,7 +70,7 @@ public final class MainActivity extends AppCompatActivity {
         sp.topMargin = dp(5);
         brand.addView(subtitle, sp);
 
-        TextView version = CatUi.pill(this, "V2 DEV4", Color.rgb(56, 65, 128));
+        TextView version = CatUi.pill(this, "V2 DEV5", Color.rgb(56, 65, 128));
         heroTop.addView(version, new LinearLayout.LayoutParams(dp(82), dp(34)));
 
         rootReady = EnvironmentProbe.hasRoot();
