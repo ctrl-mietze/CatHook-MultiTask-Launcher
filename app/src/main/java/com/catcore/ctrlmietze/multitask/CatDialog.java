@@ -99,7 +99,7 @@ public final class CatDialog {
         x.setBackground(CatUi.stroke(c,Color.rgb(17,22,39),28,Color.rgb(64,77,126))); return x;
     }
     private static void size(Dialog d){ Window w=d.getWindow(); if(w!=null){w.setLayout((int)(d.getContext().getResources().getDisplayMetrics().widthPixels*.90f),WindowManager.LayoutParams.WRAP_CONTENT);WindowManager.LayoutParams a=w.getAttributes();a.dimAmount=.72f;w.setAttributes(a);} }
-    private static int dp(Context c,int v){return CatUi.dp(c,v);}
+    private static int dp(Activity c,int v){return CatUi.dp(c,v);}
     // dev7 build marker: Activity-backed CatUi modal
     public interface Choice { void onChoice(int index); }
 }
