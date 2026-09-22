@@ -1,21 +1,28 @@
-# CatCore MultiTask v0.1.0
+# MultiTask V1.5.0.1
 
-Der erste öffentliche Release von CatCore MultiTask.
+V1.5.0.1 ist das große Launcher-, UI- und Task-Management-Update.
 
 ## Highlights
 
-- Startet installierte User-Apps als zusätzlichen Android-Task.
-- Nutzt Root für die vollständigen Task-Flags und fällt bei Bedarf auf einen normalen Intent zurück.
-- Zeigt ausschließlich User-Apps in einer durchsuchbaren Oberfläche an.
-- Optionaler LSPosed-Schnellbutton in ausgewählten Apps.
-- Neues CatCore-App-Icon für klassische und adaptive Android-Launcher.
-- Zielplattform Android 9 bis Android 16 (`minSdk 28`, `targetSdk 36`).
+- Neuer mehrstufiger Activity-/Launcher-Resolver mit mehreren Kandidaten und Fallbacks.
+- Erfolgreiche Startmethode wird pro Paket gespeichert.
+- Startet im aktuellen Android-User statt fest mit User 0.
+- Detaillierte Fehlermeldung mit direktem Weg zu den Einstellungen.
+- Neues UI und Home-Screen-Name **MultiTask**.
+- Neuer **Task Manager** mit View All / View MultiTask.
+- Bis zu **8 Tasks** einer App in einem Durchlauf öffnen.
+- **Close all MultiTask** zum kontrollierten Zurückführen von Duplikaten.
+- **Compatibility Mode** mit kurzer App-Analyse.
+- **Max Stability** mit erweiterter Fallback-Kette.
+- Experimenteller **Open apps as child tasks**-Modus.
+- Optionale Prozesswerte über Android `device_config`; Wiederherstellung nach Boot/App-Start.
+- LSPosed-Standard-Scope: **MultiTask + System Framework**. Ziel-Apps müssen für den normalen Launcher nicht einzeln ausgewählt werden.
+- Optionaler `Ⅱ`-Schnellbutton bleibt für explizit ausgewählte Ziel-Apps verfügbar.
 
-## Installation
+## Start
 
-1. APK aus den Release-Assets herunterladen und installieren.
-2. Das Modul in LSPosed aktivieren.
-3. **CatCore MultiTask** und gewünschte Ziel-Apps zum Scope hinzufügen.
-4. App beziehungsweise Ziel-Apps neu starten.
+MultiTask öffnen → gewünschte App suchen → rechts den **▶ Play-Button** drücken.
 
-> Root und LSPosed werden für den vollen Funktionsumfang benötigt. Manche Apps können durch ihren eigenen Launch-Modus die Wiederverwendung eines vorhandenen Tasks erzwingen.
+Bei einem Fehler zeigt MultiTask den konkreten letzten Startfehler und bietet **Open settings** an.
+
+> Apps mit restriktivem Manifest-LaunchMode können Android weiterhin dazu zwingen, einen vorhandenen Task wiederzuverwenden.
