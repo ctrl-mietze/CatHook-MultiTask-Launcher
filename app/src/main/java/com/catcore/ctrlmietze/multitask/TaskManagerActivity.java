@@ -283,7 +283,7 @@ public final class TaskManagerActivity extends AppCompatActivity {
     private Button button(String label) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextAllCaps(false);
+        b.setAllCaps(false);
         b.setTextColor(Color.WHITE);
         b.setBackground(shape(Color.rgb(79, 108, 231), dp(14)));
         return b;
