@@ -568,6 +568,10 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                         context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_BOOT, boot);
                 Settings.Global.putLong(
                         context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_UPTIME, now);
+                Settings.Global.putInt(
+                        context.getContentResolver(),
+                        EnvironmentProbe.GLOBAL_HOOK_PROTOCOL,
+                        EnvironmentProbe.CURRENT_HOOK_PROTOCOL);
                 lastSystemHeartbeatWrite = now;
             }
         } catch (Throwable ignored) {
