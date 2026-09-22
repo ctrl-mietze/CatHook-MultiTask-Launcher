@@ -72,13 +72,15 @@ public final class TaskManagerActivity extends AppCompatActivity {
         root.addView(modes, modeParams);
 
         RadioButton all = new RadioButton(this);
-        all.setId(View.generateViewId());\n        all.setText("View All");
+        all.setId(View.generateViewId());
+        all.setText("View All");
         all.setTextColor(Color.WHITE);
         all.setChecked(true);
         modes.addView(all, new RadioGroup.LayoutParams(0, -2, 1));
 
         RadioButton multi = new RadioButton(this);
-        multi.setId(View.generateViewId());\n        multi.setText("View MultiTask");
+        multi.setId(View.generateViewId());
+        multi.setText("View MultiTask");
         multi.setTextColor(Color.WHITE);
         modes.addView(multi, new RadioGroup.LayoutParams(0, -2, 1));
 
