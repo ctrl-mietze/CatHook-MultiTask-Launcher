@@ -38,6 +38,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public final class MultiTaskHook implements IXposedHookLoadPackage {
     private static final String SELF = "com.catcore.ctrlmietze.multitask";
     private static volatile long stabilityWindowUntil;
+    private static volatile long lastSystemHeartbeatWrite;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -117,14 +118,24 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
 
     private static void markSystemHookActive(Object service) {
         try {
-            Context context = (Context) XposedHelpers.getObjectField(service, "mContext");
-            int boot = Settings.Global.getInt(
-                    context.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
-            Settings.Global.putInt(
-                    context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_BOOT, boot);
-            Settings.Global.putLong(
-                    context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_UPTIME,
-                    SystemClock.elapsedRealtime());
+            long now = SystemClock.elapsedRealtime();
+            long last = lastSystemHeartbeatWrite;
+            if (last > 0L && now - last < 30_000L) return;
+
+            synchronized (MultiTaskHook.class) {
+                now = SystemClock.elapsedRealtime();
+                last = lastSystemHeartbeatWrite;
+                if (last > 0L && now - last < 30_000L) return;
+
+                Context context = (Context) XposedHelpers.getObjectField(service, "mContext");
+                int boot = Settings.Global.getInt(
+                        context.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+                Settings.Global.putInt(
+                        context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_BOOT, boot);
+                Settings.Global.putLong(
+                        context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_UPTIME, now);
+                lastSystemHeartbeatWrite = now;
+            }
         } catch (Throwable ignored) {
         }
     }
