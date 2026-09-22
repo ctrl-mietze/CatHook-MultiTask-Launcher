@@ -327,7 +327,7 @@ public final class TaskManagerActivity extends AppCompatActivity {
 
         Button open = CatUi.primaryButton(this, "Open more");
         actions.addView(open, new LinearLayout.LayoutParams(0, dp(48), 1));
-        open.setOnClickListener(v -> askWindowCount(first.packageName));
+        open.setOnClickListener(v -> askWindowCount(first.packageName, tasks.size()));
 
         Button manage = CatUi.secondaryButton(this, "Manage");
         LinearLayout.LayoutParams manageParams = new LinearLayout.LayoutParams(0, dp(48), 1);
@@ -355,7 +355,7 @@ public final class TaskManagerActivity extends AppCompatActivity {
         row.addView(box, p);
     }
 
-    private void askWindowCount(String pkg) {
+    private void askWindowCount(String pkg, int currentCount) {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
         input.setText("2");
@@ -381,13 +381,13 @@ public final class TaskManagerActivity extends AppCompatActivity {
                         return;
                     }
                     dialog.dismiss();
-                    openMore(pkg, number);
+                    openMore(pkg, currentCount, number);
                 }));
 
         dialog.show();
     }
 
-    private void openMore(String pkg, int number) {
+    private void openMore(String pkg, int currentCount, int number) {
         String activity = preferredActivity(pkg);
 
         if (SettingsStore.startMode(this) == SettingsStore.MODE_MY_TASK) {
@@ -409,22 +409,18 @@ public final class TaskManagerActivity extends AppCompatActivity {
             return;
         }
 
-        exec.execute(() -> {
-            int currentCount = TaskInspector.countTasksForPackage(pkg);
-            int target = currentCount < 0
-                    ? Math.max(1, Math.min(8, number))
-                    : Math.max(1, Math.min(8, currentCount + number));
+        int target = Math.max(1, Math.min(8,
+                Math.max(0, currentCount) + number));
 
-            runOnUiThread(() -> SystemTaskBridge.ensureTaskCount(
-                    this,
-                    pkg,
-                    activity,
-                    target,
-                    (ok, before, after, desired, message) -> {
-                        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-                        refresh(true);
-                    }));
-        });
+        SystemTaskBridge.ensureTaskCount(
+                this,
+                pkg,
+                activity,
+                target,
+                (ok, before, after, desired, message) -> {
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                    refresh(true);
+                });
     }
 
     private void showTaskDetails(TaskInspector.TaskInfo first, List<TaskInspector.TaskInfo> tasks) {
