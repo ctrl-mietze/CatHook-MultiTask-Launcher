@@ -162,12 +162,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
 
             int callingUid = Binder.getCallingUid();
             int userId = Math.max(0, callingUid / 100000);
-            final Object user;
-            try {
-                user = XposedHelpers.callStaticMethod(UserHandle.class, "of", userId);
-            } catch (Throwable noFactory) {
-                user = XposedHelpers.newInstance(UserHandle.class, userId);
-            }
+            final Object user = resolveUserHandle(userId);
             Handler handler = new Handler(context.getMainLooper());
 
             for (int i = 1; i < desired; i++) {
@@ -195,6 +190,14 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                     + " tasks for normal launch of " + pkg);
         } catch (Throwable t) {
             XposedBridge.log("MultiTask V2 task rule hook: " + t);
+        }
+    }
+
+    private static Object resolveUserHandle(int userId) {
+        try {
+            return XposedHelpers.callStaticMethod(UserHandle.class, "of", userId);
+        } catch (Throwable noFactory) {
+            return XposedHelpers.newInstance(UserHandle.class, userId);
         }
     }
 
