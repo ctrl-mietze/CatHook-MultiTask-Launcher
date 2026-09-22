@@ -337,9 +337,7 @@ public final class FirstStartActivity extends AppCompatActivity {
     }
 
     private void openLsposed() {
-        secondary.setEnabled(false);
         LsposedLauncher.open(this, (ok, message) -> {
-            secondary.setEnabled(true);
             if (!ok) {
                 new AlertDialog.Builder(this)
                         .setTitle("Could not open LSPosed")
