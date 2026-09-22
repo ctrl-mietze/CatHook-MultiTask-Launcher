@@ -7,7 +7,7 @@ V2 is a major-generation rewrite. The earlier `v2-window-framework` branch is pr
 - Android launcher name: **MultiTask**
 - In-app product name: **CatCore MultiTask**
 - Package: `com.catcore.ctrlmietze.multitask`
-- Development version: `2.0.0.0-dev2`
+- Development version: `2.0.0.0-dev3`
 
 ## Privileged stack
 
