@@ -242,9 +242,13 @@ public final class TaskInspector {
                         + " activities", 7);
         Map<Integer, RawTask> tasks = parseTasks(result.output);
 
-        if (tasks.isEmpty() && !result.ok) {
+        if (!result.ok && result.output.trim().isEmpty()) {
             result = RootShell.run("dumpsys activity activities", 8);
             tasks = parseTasks(result.output);
+        }
+
+        if (!result.ok && result.output.trim().isEmpty()) {
+            return -1;
         }
 
         int count = 0;
