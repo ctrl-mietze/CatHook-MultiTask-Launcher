@@ -161,7 +161,8 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             if (desired <= 1) return;
 
             int callingUid = Binder.getCallingUid();
-            UserHandle user = UserHandle.of(UserHandle.getUserId(callingUid));
+            int userId = Math.max(0, callingUid / 100000);
+            UserHandle user = UserHandle.of(userId);
             Handler handler = new Handler(context.getMainLooper());
 
             for (int i = 1; i < desired; i++) {
