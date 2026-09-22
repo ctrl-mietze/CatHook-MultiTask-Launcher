@@ -2,13 +2,13 @@ package com.catcore.ctrlmietze.multitask;
 
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -44,10 +44,10 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     @Override
     public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
-        LinearLayout row = new LinearLayout(activity);
+        LinearLayout row = CatUi.card(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(13), dp(11), dp(10), dp(11));
-        row.setBackground(shape(Color.rgb(20, 24, 33), dp(17)));
 
         RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(-1, -2);
         params.topMargin = dp(5);
@@ -55,7 +55,7 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         row.setLayoutParams(params);
 
         ImageView icon = new ImageView(activity);
-        row.addView(icon, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        row.addView(icon, new LinearLayout.LayoutParams(dp(46), dp(46)));
 
         LinearLayout labels = new LinearLayout(activity);
         labels.setOrientation(LinearLayout.VERTICAL);
@@ -64,33 +64,35 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         labelParams.rightMargin = dp(8);
         row.addView(labels, labelParams);
 
-        TextView name = new TextView(activity);
-        name.setTextColor(Color.WHITE);
-        name.setTextSize(15);
-        name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        TextView name = CatUi.text(activity, "", 15, CatUi.TEXT, true);
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         labels.addView(name);
 
-        TextView packageName = new TextView(activity);
-        packageName.setTextColor(Color.rgb(143, 156, 180));
-        packageName.setTextSize(11);
+        TextView packageName = CatUi.text(activity, "", 10, CatUi.MUTED, false);
         packageName.setSingleLine(true);
         packageName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams packageParams = new LinearLayout.LayoutParams(-1, -2);
         packageParams.topMargin = dp(3);
         labels.addView(packageName, packageParams);
 
-        TextView play = new TextView(activity);
-        play.setText("▶");
-        play.setGravity(Gravity.CENTER);
-        play.setTextColor(Color.WHITE);
-        play.setTextSize(18);
-        play.setContentDescription("Start app");
-        play.setBackground(shape(Color.rgb(80, 111, 238), dp(15)));
-        row.addView(play, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout controls = new LinearLayout(activity);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(controls);
 
-        return new Holder(row, icon, name, packageName, play);
+        TextView count = CatUi.pill(activity, "×1", Color.rgb(45, 52, 72));
+        controls.addView(count, new LinearLayout.LayoutParams(dp(46), dp(38)));
+
+        TextView play = CatUi.pill(activity, "▶", Color.rgb(69, 91, 198));
+        play.setTextSize(16);
+        play.setContentDescription("Start app");
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(46), dp(46));
+        pp.leftMargin = dp(7);
+        controls.addView(play, pp);
+
+        CatUi.pressScale(play);
+        CatUi.pressScale(count);
+        return new Holder(row, icon, name, packageName, count, play);
     }
 
     @Override
@@ -100,17 +102,51 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         holder.name.setText(app.label);
         holder.packageName.setText(app.packageName);
 
+        int rule = AppTaskRules.get(activity, app.packageName);
+        holder.count.setText("×" + rule);
+        holder.count.setBackground(CatUi.shape(activity,
+                rule > 1 ? Color.rgb(61, 75, 145) : Color.rgb(45, 52, 72), 999));
+
+        holder.count.setOnClickListener(v ->
+                activity.askTaskRule(app, () -> {
+                    int adapterPosition = holder.getBindingAdapterPosition();
+                    if (adapterPosition != RecyclerView.NO_POSITION) notifyItemChanged(adapterPosition);
+                }));
+
         View.OnClickListener launch = view -> {
             if (!activity.isXposedActive()) {
                 activity.showXposedRequired();
                 return;
             }
 
-            WindowFramework.open(
+            if (SettingsStore.startMode(activity) == SettingsStore.MODE_MY_TASK) {
+                WindowFramework.open(activity, app.packageName, app.activityName, app.label);
+                return;
+            }
+
+            boolean showAnalysis = SettingsStore.compatibilityMode(activity);
+            if (showAnalysis) {
+                activity.showCompatibilityProgress("Resolving " + app.label + "…");
+            }
+
+            TaskLauncher.Progress progress = showAnalysis
+                    ? activity::showCompatibilityProgress
+                    : null;
+
+            TaskLauncher.launchNewTask(
                     activity,
                     app.packageName,
                     app.activityName,
-                    app.label);
+                    progress,
+                    (ok, message) -> {
+                        activity.hideCompatibilityProgress();
+                        if (ok) {
+                            Toast.makeText(activity, "Opened " + app.label,
+                                    Toast.LENGTH_SHORT).show();
+                        } else {
+                            activity.showLaunchFailure(app.label, message);
+                        }
+                    });
         };
 
         holder.play.setOnClickListener(launch);
@@ -122,29 +158,24 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return shown.size();
     }
 
-    private GradientDrawable shape(int color, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
     private int dp(int value) {
-        return Math.round(value * activity.getResources().getDisplayMetrics().density);
+        return CatUi.dp(activity, value);
     }
 
     static final class Holder extends RecyclerView.ViewHolder {
         final ImageView icon;
         final TextView name;
         final TextView packageName;
+        final TextView count;
         final TextView play;
 
         Holder(View itemView, ImageView icon, TextView name,
-               TextView packageName, TextView play) {
+               TextView packageName, TextView count, TextView play) {
             super(itemView);
             this.icon = icon;
             this.name = name;
             this.packageName = packageName;
+            this.count = count;
             this.play = play;
         }
     }
