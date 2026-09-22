@@ -13,6 +13,9 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.catcore.ctrlmietze.multitask.RootPluginManager;
+import com.catcore.ctrlmietze.multitask.SettingsStore;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -101,14 +104,39 @@ public final class WindowHostActivity extends AppCompatActivity {
         VirtualWindowView window = new VirtualWindowView(
                 this, pkg, activity, label,
                 closed -> {
+                    String closedPackage = closed.packageName();
                     windows.remove(closed);
                     canvas.removeView(closed);
+
+                    boolean stillOpen = false;
+                    for (VirtualWindowView other : windows) {
+                        if (closedPackage.equals(other.packageName())) {
+                            stillOpen = true;
+                            break;
+                        }
+                    }
+
+                    if (!stillOpen
+                            && SettingsStore.rootHelperEnabled(this)
+                            && RootPluginManager.isInstalled()) {
+                        RootPluginManager.runAsync("restore", closedPackage, null);
+                        if (SettingsStore.autoTrim(this)) {
+                            RootPluginManager.runAsync("trim", closedPackage, null);
+                        }
+                    }
                     updateStatus();
                 });
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height);
         canvas.addView(window, lp);
         windows.add(window);
+
+        if (SettingsStore.rootHelperEnabled(this)
+                && SettingsStore.sessionPriority(this)
+                && RootPluginManager.isInstalled()) {
+            canvas.postDelayed(() ->
+                    RootPluginManager.runAsync("boost", pkg, null), 700L);
+        }
 
         int offset = dp(22) * (cascade++ % 6);
         window.setX(dp(8) + offset);
