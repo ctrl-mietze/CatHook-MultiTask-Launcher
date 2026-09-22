@@ -333,7 +333,9 @@ public final class TaskManagerActivity extends AppCompatActivity {
         LinearLayout.LayoutParams manageParams = new LinearLayout.LayoutParams(0, dp(48), 1);
         manageParams.leftMargin = dp(8);
         actions.addView(manage, manageParams);
-        manage.setOnClickListener(v -> showTaskDetails(first, tasks));
+        manage.setOnClickListener(v -> startActivity(
+                new Intent(this, TaskWindowActivity.class)
+                        .putExtra(TaskWindowActivity.EXTRA_PACKAGE, first.packageName)));
 
         return card;
     }
