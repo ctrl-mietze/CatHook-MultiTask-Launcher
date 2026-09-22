@@ -3,6 +3,8 @@ package com.catcore.ctrlmietze.multitask.window;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -29,6 +31,13 @@ public final class WindowHostActivity extends AppCompatActivity {
     private int cascade;
     private int layoutMode;
     private boolean restoring;
+    private final Handler guardHandler = new Handler(Looper.getMainLooper());
+    private final Runnable guardHeartbeat = new Runnable() {
+        @Override public void run() {
+            WindowGuardBridge.heartbeat(WindowHostActivity.this, windows.size());
+            if (!windows.isEmpty()) guardHandler.postDelayed(this, 5000L);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle state) {
@@ -91,6 +100,23 @@ public final class WindowHostActivity extends AppCompatActivity {
                 handleIntent(getIntent());
             }
         });
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        guardHandler.removeCallbacks(guardHeartbeat);
+        guardHandler.post(guardHeartbeat);
+    }
+
+    @Override protected void onPause() {
+        WindowGuardBridge.heartbeat(this, windows.size());
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        guardHandler.removeCallbacks(guardHeartbeat);
+        WindowGuardBridge.heartbeat(this, windows.size());
+        super.onDestroy();
     }
 
     @Override
@@ -318,6 +344,10 @@ public final class WindowHostActivity extends AppCompatActivity {
                 ? WindowFramework.capabilitySummary(this)
                 : count + " live window" + (count == 1 ? "" : "s")
                         + " · " + WindowFramework.capabilitySummary(this));
+
+        WindowGuardBridge.heartbeat(this, count);
+        guardHandler.removeCallbacks(guardHeartbeat);
+        if (count > 0) guardHandler.postDelayed(guardHeartbeat, 5000L);
 
         CatCoreFrameworkService.updateStatus(
                 this,
