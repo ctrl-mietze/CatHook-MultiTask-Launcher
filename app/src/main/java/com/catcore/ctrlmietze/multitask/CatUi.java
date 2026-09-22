@@ -13,9 +13,9 @@ import android.widget.TextView;
 
 public final class CatUi {
     public static final int BG = Color.rgb(7, 9, 14);
-    public static final int SURFACE = Color.rgb(17, 21, 30);
-    public static final int SURFACE_2 = Color.rgb(25, 31, 44);
-    public static final int SURFACE_3 = Color.rgb(34, 41, 58);
+    public static final int SURFACE = Color.rgb(15, 19, 29);
+    public static final int SURFACE_2 = Color.rgb(23, 29, 43);
+    public static final int SURFACE_3 = Color.rgb(31, 39, 57);
     public static final int TEXT = Color.rgb(247, 249, 255);
     public static final int MUTED = Color.rgb(157, 170, 194);
     public static final int ACCENT = Color.rgb(110, 133, 255);
@@ -35,7 +35,7 @@ public final class CatUi {
     public static GradientDrawable background() {
         GradientDrawable d = new GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(7, 9, 14), Color.rgb(10, 13, 22), Color.rgb(8, 10, 16)});
+                new int[]{Color.rgb(5, 7, 12), Color.rgb(9, 12, 22), Color.rgb(11, 9, 20)});
         return d;
     }
 
@@ -45,6 +45,19 @@ public final class CatUi {
                 new int[]{Color.rgb(35, 44, 86), Color.rgb(47, 34, 96), Color.rgb(20, 28, 54)});
         d.setCornerRadius(dp(a, 28));
         d.setStroke(dp(a, 1), Color.rgb(68, 80, 132));
+        return d;
+    }
+
+    public static GradientDrawable dashboard(Activity a) {
+        GradientDrawable d = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{
+                        Color.rgb(20, 31, 63),
+                        Color.rgb(28, 29, 69),
+                        Color.rgb(18, 48, 61)
+                });
+        d.setCornerRadius(dp(a, 26));
+        d.setStroke(dp(a, 1), Color.rgb(61, 83, 132));
         return d;
     }
 
@@ -115,7 +128,7 @@ public final class CatUi {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(a, 16), dp(a, 15), dp(a, 16), dp(a, 15));
         card.setBackground(stroke(a, SURFACE, 22, Color.rgb(36, 43, 60)));
-        card.setElevation(dp(a, 1));
+        card.setElevation(dp(a, 2));
         return card;
     }
 
