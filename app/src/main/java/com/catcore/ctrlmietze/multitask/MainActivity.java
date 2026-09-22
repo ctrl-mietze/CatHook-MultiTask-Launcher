@@ -1,14 +1,14 @@
 package com.catcore.ctrlmietze.multitask;
 
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -28,9 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class MainActivity extends AppCompatActivity {
-    private TextView statusTitle;
-    private TextView statusHint;
-    private View statusDot;
+    private TextView frameworkStatus;
     private AlertDialog compatibilityDialog;
     private TextView compatibilityText;
 
@@ -38,125 +36,162 @@ public final class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
 
+        if (!SettingsStore.onboardingComplete(this)) {
+            startActivity(new Intent(this, FirstStartActivity.class));
+            finish();
+            return;
+        }
+
+        CatUi.applyWindow(this);
+        if (SettingsStore.frameworkEnabled(this)) {
+            try { CatCoreFrameworkService.start(this); } catch (Throwable ignored) {}
+        }
+
         List<AppEntry> apps = loadApps();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(16), dp(18), 0);
-        root.setBackgroundColor(Color.rgb(10, 12, 17));
+        root.setPadding(dp(16), dp(16), dp(16), 0);
+        root.setBackground(CatUi.background());
 
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(header, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout hero = CatUi.card(this);
+        hero.setBackground(CatUi.hero(this));
+        hero.setPadding(dp(18), dp(18), dp(18), dp(18));
+        root.addView(hero, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout headerText = new LinearLayout(this);
-        headerText.setOrientation(LinearLayout.VERTICAL);
-        header.addView(headerText, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout heroTop = new LinearLayout(this);
+        heroTop.setGravity(Gravity.CENTER_VERTICAL);
+        hero.addView(heroTop);
 
-        TextView title = text("MultiTask", 30, Color.WHITE, true);
-        headerText.addView(title);
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        heroTop.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
 
-        TextView subtitle = text("Open apps inside independent live windows.", 13,
-                Color.rgb(160, 171, 192), false);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
-        subtitleParams.topMargin = dp(2);
-        headerText.addView(subtitle, subtitleParams);
+        TextView kicker = CatUi.text(this, "CATCORE", 11, Color.rgb(165, 177, 255), true);
+        kicker.setLetterSpacing(0.12f);
+        brand.addView(kicker);
 
-        Button settings = button("⚙");
-        settings.setContentDescription("Settings");
-        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(dp(48), dp(48));
-        header.addView(settings, settingsParams);
-        settings.setOnClickListener(v ->
+        brand.addView(CatUi.text(this, "CatCore MultiTask", 29, CatUi.TEXT, true));
+
+        TextView subtitle = CatUi.text(this,
+                "Independent task sessions, framework windows and per-app launch rules.",
+                13, Color.rgb(205, 213, 235), false);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
+        sp.topMargin = dp(6);
+        brand.addView(subtitle, sp);
+
+        TextView version = CatUi.pill(this, "V2", Color.rgb(56, 65, 128));
+        heroTop.addView(version, new LinearLayout.LayoutParams(dp(54), dp(34)));
+
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams srp = new LinearLayout.LayoutParams(-1, -2);
+        srp.topMargin = dp(16);
+        hero.addView(statusRow, srp);
+
+        statusRow.addView(statusPill(
+                EnvironmentProbe.hasRoot() ? "ROOT" : "NO ROOT",
+                EnvironmentProbe.hasRoot() ? CatUi.GOOD : CatUi.BAD));
+
+        statusRow.addView(statusPill(
+                isXposedActive() ? "LSPOSED" : "NO LSPOSED",
+                isXposedActive() ? CatUi.GOOD : CatUi.BAD));
+
+        statusRow.addView(statusPill(
+                EnvironmentProbe.isSystemHookActive(this) ? "SYSTEM HOOK" : "HOOK OFF",
+                EnvironmentProbe.isSystemHookActive(this) ? CatUi.GOOD : CatUi.WARN));
+
+        frameworkStatus = statusPill(
+                isFrameworkRunning() ? "FRAMEWORK" : "FRAMEWORK OFF",
+                isFrameworkRunning() ? CatUi.GOOD : CatUi.WARN);
+        statusRow.addView(frameworkStatus);
+
+        LinearLayout modeCard = CatUi.card(this);
+        LinearLayout.LayoutParams mcp = CatUi.cardParams(this);
+        mcp.topMargin = dp(14);
+        root.addView(modeCard, mcp);
+
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setGravity(Gravity.CENTER_VERTICAL);
+        modeCard.addView(modeRow);
+
+        LinearLayout modeText = new LinearLayout(this);
+        modeText.setOrientation(LinearLayout.VERTICAL);
+        modeRow.addView(modeText, new LinearLayout.LayoutParams(0, -2, 1));
+
+        boolean mine = SettingsStore.startMode(this) == SettingsStore.MODE_MY_TASK;
+        modeText.addView(CatUi.text(this,
+                mine ? "Start as my task" : "Start as app's own task",
+                16, CatUi.TEXT, true));
+        modeText.addView(CatUi.text(this,
+                mine ? "MultiTask-owned V2 session" : "Root + LSPosed native task chain",
+                12, CatUi.MUTED, false));
+
+        TextView modePill = CatUi.pill(this, "CHANGE", Color.rgb(51, 61, 86));
+        modeRow.addView(modePill, new LinearLayout.LayoutParams(dp(76), dp(34)));
+        modeCard.setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
-        actionsParams.topMargin = dp(16);
-        root.addView(actions, actionsParams);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
+        ap.topMargin = dp(12);
+        root.addView(actions, ap);
 
-        Button taskManager = button("Task Manager");
-        LinearLayout.LayoutParams managerParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        actions.addView(taskManager, managerParams);
-        taskManager.setOnClickListener(v -> {
-            if (!isXposedActive()) {
-                showXposedRequired();
-                return;
-            }
-            startActivity(new Intent(this, TaskManagerActivity.class));
-        });
+        Button tasks = CatUi.primaryButton(this, "Task Manager");
+        actions.addView(tasks, new LinearLayout.LayoutParams(0, dp(52), 1));
+        tasks.setOnClickListener(v ->
+                startActivity(new Intent(this, TaskManagerActivity.class)));
 
-        Button quickSettings = button("Settings");
-        LinearLayout.LayoutParams quickParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        quickParams.leftMargin = dp(10);
-        actions.addView(quickSettings, quickParams);
-        quickSettings.setOnClickListener(v ->
+        Button settings = CatUi.secondaryButton(this, "Settings");
+        LinearLayout.LayoutParams setp = new LinearLayout.LayoutParams(0, dp(52), 1);
+        setp.leftMargin = dp(8);
+        actions.addView(settings, setp);
+        settings.setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
-        LinearLayout status = new LinearLayout(this);
-        status.setGravity(Gravity.CENTER_VERTICAL);
-        status.setPadding(dp(15), dp(14), dp(15), dp(14));
-        status.setBackground(shape(Color.rgb(21, 25, 34), dp(18)));
-        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(-1, -2);
-        statusParams.topMargin = dp(14);
-        root.addView(status, statusParams);
+        Button rootManager = CatUi.secondaryButton(this, "Root");
+        LinearLayout.LayoutParams rmp = new LinearLayout.LayoutParams(dp(74), dp(52));
+        rmp.leftMargin = dp(8);
+        actions.addView(rootManager, rmp);
+        rootManager.setOnClickListener(v ->
+                startActivity(new Intent(this, RootManagerActivity.class)));
 
-        statusDot = new View(this);
-        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(10), dp(10));
-        dotParams.rightMargin = dp(12);
-        status.addView(statusDot, dotParams);
+        LinearLayout appsHeader = new LinearLayout(this);
+        appsHeader.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams ahp = new LinearLayout.LayoutParams(-1, -2);
+        ahp.topMargin = dp(22);
+        root.addView(appsHeader, ahp);
 
-        LinearLayout statusTexts = new LinearLayout(this);
-        statusTexts.setOrientation(LinearLayout.VERTICAL);
-        status.addView(statusTexts, new LinearLayout.LayoutParams(0, -2, 1));
-
-        statusTitle = text("", 15, Color.WHITE, true);
-        statusTexts.addView(statusTitle);
-
-        statusHint = text("", 12, Color.rgb(151, 164, 188), false);
-        LinearLayout.LayoutParams statusHintParams = new LinearLayout.LayoutParams(-1, -2);
-        statusHintParams.topMargin = dp(3);
-        statusTexts.addView(statusHint, statusHintParams);
-        updateXposedStatus();
-
-        LinearLayout searchRow = new LinearLayout(this);
-        searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams searchRowParams = new LinearLayout.LayoutParams(-1, -2);
-        searchRowParams.topMargin = dp(18);
-        root.addView(searchRow, searchRowParams);
-
-        TextView appHeading = text("Apps", 18, Color.WHITE, true);
-        searchRow.addView(appHeading, new LinearLayout.LayoutParams(0, -2, 1));
-
-        TextView count = text(String.valueOf(apps.size()), 13,
-                Color.rgb(142, 156, 183), true);
-        count.setGravity(Gravity.CENTER);
-        count.setBackground(shape(Color.rgb(29, 35, 49), dp(12)));
-        searchRow.addView(count, new LinearLayout.LayoutParams(dp(48), dp(30)));
+        appsHeader.addView(CatUi.text(this, "Apps", 20, CatUi.TEXT, true),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        appsHeader.addView(CatUi.pill(this,
+                String.valueOf(apps.size()), Color.rgb(40, 47, 66)));
 
         EditText search = new EditText(this);
         search.setSingleLine(true);
         search.setHint("Search apps or packages");
-        search.setTextColor(Color.WHITE);
-        search.setHintTextColor(Color.rgb(128, 141, 166));
+        search.setTextColor(CatUi.TEXT);
+        search.setHintTextColor(Color.rgb(118, 131, 156));
         search.setTextSize(14);
-        search.setPadding(dp(15), 0, dp(15), 0);
-        search.setBackground(shape(Color.rgb(27, 32, 44), dp(15)));
-        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(-1, dp(50));
+        search.setPadding(dp(16), 0, dp(16), 0);
+        search.setBackground(CatUi.stroke(this, CatUi.SURFACE, 18, Color.rgb(42, 49, 69)));
+        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(-1, dp(52));
         searchParams.topMargin = dp(10);
-        searchParams.bottomMargin = dp(6);
+        searchParams.bottomMargin = dp(4);
         root.addView(search, searchParams);
 
         RecyclerView list = new RecyclerView(this);
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setClipToPadding(false);
-        list.setPadding(0, 0, 0, dp(16));
+        list.setPadding(0, dp(2), 0, dp(18));
         root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
 
         setContentView(root);
 
         AppAdapter adapter = new AppAdapter(this, apps);
         list.setAdapter(adapter);
+
         search.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -173,41 +208,51 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (statusTitle != null) updateXposedStatus();
+        if (frameworkStatus != null) {
+            boolean running = isFrameworkRunning();
+            frameworkStatus.setText(running ? "FRAMEWORK" : "FRAMEWORK OFF");
+            frameworkStatus.setBackground(CatUi.shape(this,
+                    running ? Color.rgb(29, 78, 62) : Color.rgb(88, 67, 28), 999));
+        }
     }
 
     public boolean isXposedActive() {
-        return false;
+        return EnvironmentProbe.isXposedActive();
     }
 
     public void showXposedRequired() {
         new AlertDialog.Builder(this)
-                .setTitle("LSPosed required")
-                .setMessage("Enable MultiTask in LSPosed and keep MultiTask + System Framework in its scope. "
-                        + "You do not need to select every target app.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Open settings", (d, w) ->
-                        startActivity(new Intent(this, SettingsActivity.class)))
+                .setTitle("LSPosed activation required")
+                .setMessage("Enable MultiTask in LSPosed with MultiTask + System Framework in scope, then restart MultiTask.")
+                .setNegativeButton("Close", null)
+                .setPositiveButton("Open setup", (d, w) -> {
+                    SettingsStore.setOnboardingComplete(this, false);
+                    getSharedPreferences("multitask_first_start", MODE_PRIVATE)
+                            .edit().putInt("step", 2).apply();
+                    Intent i = new Intent(this, FirstStartActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                    finishAffinity();
+                })
                 .show();
     }
 
     public void showCompatibilityProgress(String message) {
         if (compatibilityDialog == null) {
             LinearLayout box = new LinearLayout(this);
-            box.setOrientation(LinearLayout.HORIZONTAL);
             box.setGravity(Gravity.CENTER_VERTICAL);
-            box.setPadding(dp(20), dp(14), dp(20), dp(14));
+            box.setPadding(dp(20), dp(16), dp(20), dp(16));
 
             ProgressBar progress = new ProgressBar(this);
             box.addView(progress, new LinearLayout.LayoutParams(dp(32), dp(32)));
 
-            compatibilityText = text(message, 13, Color.WHITE, false);
+            compatibilityText = CatUi.text(this, message, 13, CatUi.TEXT, false);
             LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, -2, 1);
             textParams.leftMargin = dp(14);
             box.addView(compatibilityText, textParams);
 
             compatibilityDialog = new AlertDialog.Builder(this)
-                    .setTitle("Compatibility check")
+                    .setTitle("Compatibility analysis")
                     .setView(box)
                     .setCancelable(false)
                     .create();
@@ -236,14 +281,62 @@ public final class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    private void updateXposedStatus() {
-        boolean active = isXposedActive();
-        statusDot.setBackground(shape(
-                active ? Color.rgb(52, 211, 153) : Color.rgb(244, 105, 117), dp(6)));
-        statusTitle.setText(active ? "LSPosed connected" : "LSPosed is not active");
-        statusHint.setText(active
-                ? "V2 window framework ready. Apps open inside MultiTask-owned displays."
-                : "Enable the module first. Recommended scope: MultiTask + System Framework.");
+    public void askTaskRule(AppEntry app, Runnable onChanged) {
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(AppTaskRules.get(this, app.packageName)));
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(20), dp(8), dp(20), dp(8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Automatic task count")
+                .setMessage("When " + app.label + " is opened normally, how many app tasks should exist? 1 disables the rule.")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Apply", null)
+                .create();
+
+        dialog.setOnShowListener(x -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    int count;
+                    try { count = Integer.parseInt(input.getText().toString().trim()); }
+                    catch (Throwable t) { count = 0; }
+                    if (count < 1 || count > 8) {
+                        input.setError("Choose 1–8");
+                        return;
+                    }
+                    AppTaskRules.set(this, app.packageName, count);
+                    dialog.dismiss();
+                    if (onChanged != null) onChanged.run();
+                }));
+
+        dialog.show();
+    }
+
+    private TextView statusPill(String value, int color) {
+        int bg = Color.rgb(
+                Math.max(20, Color.red(color) / 3),
+                Math.max(20, Color.green(color) / 3),
+                Math.max(20, Color.blue(color) / 3));
+        TextView pill = CatUi.pill(this, value, bg);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(30), 1);
+        p.rightMargin = dp(5);
+        pill.setLayoutParams(p);
+        pill.setTextSize(9);
+        return pill;
+    }
+
+    private boolean isFrameworkRunning() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            if (am == null) return false;
+            String wanted = getPackageName() + ":framework";
+            for (ActivityManager.RunningAppProcessInfo info : am.getRunningAppProcesses()) {
+                if (wanted.equals(info.processName)) return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     private List<AppEntry> loadApps() {
@@ -254,8 +347,10 @@ public final class MainActivity extends AppCompatActivity {
         for (ResolveInfo info : pm.queryIntentActivities(query, PackageManager.MATCH_ALL)) {
             if (info.activityInfo == null) continue;
             ApplicationInfo ai = info.activityInfo.applicationInfo;
-            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
             if (getPackageName().equals(ai.packageName)) continue;
+
+            boolean system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+            if (system && !SystemAppAllowlist.isAllowed(ai.packageName)) continue;
 
             String activity = info.activityInfo.name;
             try {
@@ -280,34 +375,7 @@ public final class MainActivity extends AppCompatActivity {
         return out;
     }
 
-    private Button button(String label) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
-        b.setTextSize(14);
-        b.setGravity(Gravity.CENTER);
-        b.setBackground(shape(Color.rgb(76, 105, 229), dp(14)));
-        return b;
-    }
-
-    private TextView text(String value, int sp, int color, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(value);
-        t.setTextSize(sp);
-        t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
-    }
-
-    private GradientDrawable shape(int color, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
     private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        return CatUi.dp(this, value);
     }
 }
