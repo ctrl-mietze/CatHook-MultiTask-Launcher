@@ -351,6 +351,10 @@ final class VirtualWindowView extends FrameLayout {
         content.addView(box, new FrameLayout.LayoutParams(-1, -1));
     }
 
+    String packageName() {
+        return packageName;
+    }
+
     void close() {
         releaseVirtualDisplay();
         if (listener != null) listener.onClosed(this);
