@@ -162,7 +162,12 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
 
             int callingUid = Binder.getCallingUid();
             int userId = Math.max(0, callingUid / 100000);
-            UserHandle user = UserHandle.of(userId);
+            final Object user;
+            try {
+                user = XposedHelpers.callStaticMethod(UserHandle.class, "of", userId);
+            } catch (Throwable noFactory) {
+                user = XposedHelpers.newInstance(UserHandle.class, userId);
+            }
             Handler handler = new Handler(context.getMainLooper());
 
             for (int i = 1; i < desired; i++) {
