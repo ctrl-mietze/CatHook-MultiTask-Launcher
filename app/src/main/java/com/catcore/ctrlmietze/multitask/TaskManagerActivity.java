@@ -369,13 +369,22 @@ public final class TaskManagerActivity extends AppCompatActivity {
             return;
         }
 
-        TaskLauncher.launchMultiple(
-                this, pkg, activity, number,
-                null,
-                (requested, started, message) -> {
-                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-                    refresh(true);
-                });
+        exec.execute(() -> {
+            int currentCount = TaskInspector.countTasksForPackage(pkg);
+            int target = currentCount < 0
+                    ? Math.max(1, Math.min(8, number))
+                    : Math.max(1, Math.min(8, currentCount + number));
+
+            runOnUiThread(() -> SystemTaskBridge.ensureTaskCount(
+                    this,
+                    pkg,
+                    activity,
+                    target,
+                    (ok, before, after, desired, message) -> {
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                        refresh(true);
+                    }));
+        });
     }
 
     private void showTaskDetails(TaskInspector.TaskInfo first, List<TaskInspector.TaskInfo> tasks) {
