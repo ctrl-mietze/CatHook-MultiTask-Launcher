@@ -1,0 +1,130 @@
+#!/system/bin/sh
+
+MODDIR=${0%/*}
+MODDIR=${MODDIR%/*}
+STATE=/data/adb/catcore_multitask
+SESSIONS="$STATE/sessions"
+
+mkdir -p "$SESSIONS" 2>/dev/null
+chmod 0700 "$STATE" "$SESSIONS" 2>/dev/null
+
+valid_pkg() {
+    case "$1" in
+        ""|*[!A-Za-z0-9._:]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+pid_belongs_to_pkg() {
+    pid="$1"
+    pkg="$2"
+    [ -r "/proc/$pid/cmdline" ] || return 1
+    cmd="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -d' ' -f1)"
+    [ "$cmd" = "$pkg" ] || [ "${cmd#"$pkg:"}" != "$cmd" ]
+}
+
+restore_one_state() {
+    file="$1"
+    [ -f "$file" ] || return 0
+
+    IFS='|' read -r pkg pid old_nice old_oom < "$file"
+    if valid_pkg "$pkg" && pid_belongs_to_pkg "$pid" "$pkg"; then
+        renice -n "${old_nice:-0}" -p "$pid" >/dev/null 2>&1
+        if [ -w "/proc/$pid/oom_score_adj" ]; then
+            echo "${old_oom:-0}" > "/proc/$pid/oom_score_adj" 2>/dev/null
+        fi
+    fi
+    rm -f "$file"
+}
+
+cmd="$1"
+pkg="$2"
+
+case "$cmd" in
+    status)
+        echo "CatCore MultiTask Root Helper ready"
+        exit 0
+        ;;
+
+    launch)
+        valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        component="$(cmd package resolve-activity --brief --user current             -a android.intent.action.MAIN             -c android.intent.category.LAUNCHER             -p "$pkg" 2>/dev/null | tail -n 1)"
+        case "$component" in
+            */*)
+                am start --user current                     --activity-new-task                     --activity-multiple-task                     --activity-new-document                     --activity-retain-in-recents                     -n "$component"
+                ;;
+            *)
+                am start --user current                     --activity-new-task                     --activity-multiple-task                     -a android.intent.action.MAIN                     -c android.intent.category.LAUNCHER                     -p "$pkg"
+                ;;
+        esac
+        ;;
+
+    boost)
+        valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        found=0
+        for pid in $(pidof "$pkg" 2>/dev/null); do
+            pid_belongs_to_pkg "$pid" "$pkg" || continue
+            found=1
+
+            old_nice="$(awk '{print $19}' "/proc/$pid/stat" 2>/dev/null)"
+            old_oom="$(cat "/proc/$pid/oom_score_adj" 2>/dev/null)"
+            file="$SESSIONS/$pkg.$pid"
+            printf '%s|%s|%s|%s\n' "$pkg" "$pid" "${old_nice:-0}" "${old_oom:-0}" > "$file"
+            chmod 0600 "$file" 2>/dev/null
+
+            renice -n -5 -p "$pid" >/dev/null 2>&1
+            [ -w "/proc/$pid/oom_score_adj" ] && echo -500 > "/proc/$pid/oom_score_adj" 2>/dev/null
+        done
+
+        [ "$found" -eq 1 ] || { echo "no running process"; exit 3; }
+        echo "session priority applied"
+        ;;
+
+    restore)
+        valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        restored=0
+        for file in "$SESSIONS/$pkg".*; do
+            [ -f "$file" ] || continue
+            restore_one_state "$file"
+            restored=1
+        done
+        [ "$restored" -eq 1 ] && echo "session priority restored" || echo "no stored session state"
+        ;;
+
+    restore-all)
+        for file in "$SESSIONS"/*; do
+            [ -f "$file" ] || continue
+            restore_one_state "$file"
+        done
+        echo "all session state restored"
+        ;;
+
+    trim)
+        valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        am send-trim-memory "$pkg" MODERATE >/dev/null 2>&1
+        echo "memory trim requested"
+        ;;
+
+    stop)
+        valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        am force-stop --user current "$pkg"
+        ;;
+
+    stats)
+        valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        ps -A -w -o PID,UID,RSS,PCPU,NAME 2>/dev/null | {
+            read -r header
+            echo "$header"
+            grep -E "[[:space:]]$pkg(:[^[:space:]]*)?$"
+        }
+        ;;
+
+    *)
+        echo "usage: catcore-helper {status|launch|boost|restore|restore-all|trim|stop|stats} [package]"
+        exit 1
+        ;;
+esac
