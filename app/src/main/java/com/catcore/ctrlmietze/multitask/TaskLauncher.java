@@ -22,6 +22,8 @@ public final class TaskLauncher {
             "com.catcore.ctrlmietze.multitask.FORCE_MULTITASK";
     public static final String EXTRA_MAX_STABILITY =
             "com.catcore.ctrlmietze.multitask.MAX_STABILITY";
+    public static final String EXTRA_RULE_SPAWN =
+            "com.catcore.ctrlmietze.multitask.RULE_SPAWN";
 
     public interface Callback {
         void onResult(boolean ok, String message);
@@ -246,6 +248,10 @@ public final class TaskLauncher {
 
     private static LaunchResult runStrategy(Context context, String strategy, String pkg,
                                             String component, boolean childTasks) {
+        if (!SettingsStore.methodEnabled(context, strategy)) {
+            return new LaunchResult(false, "Disabled in Developer Options: " + strategy);
+        }
+
         boolean maxStability = SettingsStore.maxStability(context);
         String marker = " --ez " + EXTRA_FORCE_MULTITASK + " true";
         if (maxStability) {
