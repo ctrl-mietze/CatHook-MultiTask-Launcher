@@ -65,7 +65,7 @@ public final class TaskInspector {
             if (raw.packageName != null) packages.add(raw.packageName);
         }
 
-        Map<String, ProcStats> proc = readProcessStats(packages);
+        Map<String, ProcStats> proc = readProcessStats(context, packages);
 
         PackageManager pm = context.getPackageManager();
         List<TaskInfo> out = new ArrayList<>();
@@ -163,21 +163,33 @@ public final class TaskInspector {
         return tasks;
     }
 
-    private static Map<String, ProcStats> readProcessStats(Set<String> packages) {
+    private static Map<String, ProcStats> readProcessStats(
+            Context context, Set<String> packages) {
         Map<String, ProcStats> out = new LinkedHashMap<>();
         if (packages.isEmpty()) return out;
 
-        RootShell.Result result = RootShell.run(
-                "(getconf PAGESIZE 2>/dev/null || echo 4096); "
-                        + "ps -A -w -o PID,UID,RSS,PCPU,NAME 2>/dev/null", 8);
-        if (!result.ok && result.output.isEmpty()) return out;
+        String snapshot = "";
+        if (SettingsStore.rootHelperEnabled(context)
+                && SettingsStore.rootTelemetry(context)
+                && RootPluginManager.isInstalled()) {
+            RootPluginManager.Result broker = RootPluginManager.run("stats-all", null);
+            if (broker.ok) snapshot = broker.message;
+        }
 
-        String[] lines = result.output.split("\\r?\\n");
+        if (snapshot.isEmpty()) {
+            RootShell.Result result = RootShell.run(
+                    "echo PAGESIZE=$(getconf PAGESIZE 2>/dev/null || echo 4096); "
+                            + "ps -A -w -o PID,UID,RSS,PCPU,NAME 2>/dev/null", 8);
+            if (!result.ok && result.output.isEmpty()) return out;
+            snapshot = result.output;
+        }
+
+        String[] lines = snapshot.split("\\r?\\n");
         long pageSize = 4096L;
         int start = 0;
-        if (lines.length > 0) {
+        if (lines.length > 0 && lines[0].startsWith("PAGESIZE=")) {
             try {
-                pageSize = Long.parseLong(lines[0].trim());
+                pageSize = Long.parseLong(lines[0].substring("PAGESIZE=".length()).trim());
                 start = 1;
             } catch (Throwable ignored) {
             }
