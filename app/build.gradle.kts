@@ -8,8 +8,8 @@ android {
         applicationId = "com.catcore.ctrlmietze.multitask"
         minSdk = 28
         targetSdk = 36
-        versionCode = 20003
-        versionName = "2.0.0.0-dev4"
+        versionCode = 20004
+        versionName = "2.0.0.0-dev5"
     }
 
     signingConfigs {
