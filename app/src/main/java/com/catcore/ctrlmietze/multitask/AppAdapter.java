@@ -138,6 +138,10 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                 return;
             }
 
+            // Cross-process marker used only by the framework Stability Guard.
+            // It never edits system files and expires automatically.
+            ManagedSessionRegistry.touch(activity, app.packageName);
+
             if (SettingsStore.startMode(activity) == SettingsStore.MODE_MY_TASK) {
                 WindowFramework.open(activity, app.packageName, app.activityName, app.label);
                 return;
