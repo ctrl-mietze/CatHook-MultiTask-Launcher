@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import com.catcore.ctrlmietze.multitask.RootShell;
+import com.catcore.ctrlmietze.multitask.SettingsStore;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
 
 import java.util.concurrent.ExecutorService;
@@ -21,6 +22,11 @@ final class FreeformFallback {
     private FreeformFallback() {}
 
     static void open(Activity host, String pkg, String activityName, Callback callback) {
+        if (!SettingsStore.methodEnabled(host, SettingsStore.METHOD_FREEFORM)) {
+            callback.onResult(false, "Android freeform fallback is disabled in Developer Options.");
+            return;
+        }
+
         int width = host.getResources().getDisplayMetrics().widthPixels;
         int height = host.getResources().getDisplayMetrics().heightPixels;
 
