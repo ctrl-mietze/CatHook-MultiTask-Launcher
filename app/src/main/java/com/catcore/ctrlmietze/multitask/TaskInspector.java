@@ -234,6 +234,26 @@ public final class TaskInspector {
         return out;
     }
 
+    public static int countTasksForPackage(String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) return -1;
+
+        RootShell.Result result = RootShell.run(
+                "dumpsys activity -p " + RootShell.quote(packageName)
+                        + " activities", 7);
+        Map<Integer, RawTask> tasks = parseTasks(result.output);
+
+        if (tasks.isEmpty() && !result.ok) {
+            result = RootShell.run("dumpsys activity activities", 8);
+            tasks = parseTasks(result.output);
+        }
+
+        int count = 0;
+        for (RawTask task : tasks.values()) {
+            if (packageName.equals(task.packageName)) count++;
+        }
+        return count;
+    }
+
     public static Map<String, Integer> countByPackage(List<TaskInfo> tasks) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (TaskInfo task : tasks) {
