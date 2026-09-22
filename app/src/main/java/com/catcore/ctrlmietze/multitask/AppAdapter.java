@@ -1,6 +1,5 @@
 package com.catcore.ctrlmietze.multitask;
 
-import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -11,27 +10,31 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.recyclerview.widget.RecyclerView;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.H> {
-    private final Context context;
+public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
+    private final MainActivity activity;
     private final List<AppEntry> all;
     private final List<AppEntry> shown = new ArrayList<>();
 
-    AppAdapter(Context context, List<AppEntry> apps) {
-        this.context = context;
-        all = apps;
+    AppAdapter(MainActivity activity, List<AppEntry> apps) {
+        this.activity = activity;
+        this.all = apps;
         shown.addAll(apps);
     }
 
     void filter(String query) {
         shown.clear();
-        String text = query.trim().toLowerCase();
+        String text = query.trim().toLowerCase(Locale.ROOT);
         for (AppEntry app : all) {
-            if (text.isEmpty() || app.label.toLowerCase().contains(text)
-                    || app.packageName.toLowerCase().contains(text)) {
+            if (text.isEmpty()
+                    || app.label.toLowerCase(Locale.ROOT).contains(text)
+                    || app.packageName.toLowerCase(Locale.ROOT).contains(text)) {
                 shown.add(app);
             }
         }
@@ -39,63 +42,90 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.H> {
     }
 
     @Override
-    public H onCreateViewHolder(ViewGroup parent, int viewType) {
-        LinearLayout row = new LinearLayout(context);
+    public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
+        LinearLayout row = new LinearLayout(activity);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(14), dp(12), dp(12), dp(12));
-        row.setBackground(shape(Color.rgb(21, 25, 34), dp(18)));
-        RecyclerView.LayoutParams rowParams = new RecyclerView.LayoutParams(-1, -2);
-        rowParams.topMargin = dp(6);
-        rowParams.bottomMargin = dp(6);
-        row.setLayoutParams(rowParams);
+        row.setPadding(dp(13), dp(11), dp(10), dp(11));
+        row.setBackground(shape(Color.rgb(20, 24, 33), dp(17)));
 
-        ImageView icon = new ImageView(context);
+        RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(-1, -2);
+        params.topMargin = dp(5);
+        params.bottomMargin = dp(5);
+        row.setLayoutParams(params);
+
+        ImageView icon = new ImageView(activity);
         row.addView(icon, new LinearLayout.LayoutParams(dp(44), dp(44)));
 
-        LinearLayout labels = new LinearLayout(context);
+        LinearLayout labels = new LinearLayout(activity);
         labels.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, -2, 1);
-        labelParams.leftMargin = dp(13);
+        labelParams.leftMargin = dp(12);
         labelParams.rightMargin = dp(8);
         row.addView(labels, labelParams);
 
-        TextView name = new TextView(context);
+        TextView name = new TextView(activity);
         name.setTextColor(Color.WHITE);
-        name.setTextSize(16);
+        name.setTextSize(15);
         name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         labels.addView(name);
 
-        TextView packageName = new TextView(context);
-        packageName.setTextColor(Color.rgb(154, 164, 183));
-        packageName.setTextSize(12);
+        TextView packageName = new TextView(activity);
+        packageName.setTextColor(Color.rgb(143, 156, 180));
+        packageName.setTextSize(11);
         packageName.setSingleLine(true);
         packageName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams packageParams = new LinearLayout.LayoutParams(-1, -2);
         packageParams.topMargin = dp(3);
         labels.addView(packageName, packageParams);
 
-        TextView play = new TextView(context);
+        TextView play = new TextView(activity);
         play.setText("▶");
         play.setGravity(Gravity.CENTER);
         play.setTextColor(Color.WHITE);
-        play.setTextSize(22);
-        play.setContentDescription("Als neuen Task starten");
-        play.setBackground(shape(Color.rgb(109, 140, 255), dp(15)));
-        row.addView(play, new LinearLayout.LayoutParams(dp(50), dp(50)));
-        return new H(row, icon, name, packageName, play);
+        play.setTextSize(18);
+        play.setContentDescription("Start app");
+        play.setBackground(shape(Color.rgb(80, 111, 238), dp(15)));
+        row.addView(play, new LinearLayout.LayoutParams(dp(48), dp(48)));
+
+        return new Holder(row, icon, name, packageName, play);
     }
 
     @Override
-    public void onBindViewHolder(H holder, int position) {
+    public void onBindViewHolder(Holder holder, int position) {
         AppEntry app = shown.get(position);
         holder.icon.setImageDrawable(app.icon);
         holder.name.setText(app.label);
         holder.packageName.setText(app.packageName);
-        View.OnClickListener launch = view -> TaskLauncher.launchNewTask(context,
-                app.packageName, app.activityName,
-                (ok, message) -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show());
+
+        View.OnClickListener launch = view -> {
+            if (!activity.isXposedActive()) {
+                activity.showXposedRequired();
+                return;
+            }
+
+            boolean showAnalysis = SettingsStore.compatibilityMode(activity);
+            if (showAnalysis) {
+                activity.showCompatibilityProgress("Preparing compatibility check…");
+            }
+
+            TaskLauncher.Progress progress = showAnalysis
+                    ? activity::showCompatibilityProgress
+                    : null;
+
+            TaskLauncher.launchNewTask(activity, app.packageName, app.activityName, progress,
+                    (ok, message) -> {
+                        activity.hideCompatibilityProgress();
+                        if (ok) {
+                            Toast.makeText(activity, "Opened " + app.label,
+                                    Toast.LENGTH_SHORT).show();
+                        } else {
+                            activity.showLaunchFailure(app.label, message);
+                        }
+                    });
+        };
+
         holder.play.setOnClickListener(launch);
         holder.itemView.setOnClickListener(launch);
     }
@@ -113,17 +143,18 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.H> {
     }
 
     private int dp(int value) {
-        return Math.round(value * context.getResources().getDisplayMetrics().density);
+        return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
-    static final class H extends RecyclerView.ViewHolder {
+    static final class Holder extends RecyclerView.ViewHolder {
         final ImageView icon;
         final TextView name;
         final TextView packageName;
         final TextView play;
 
-        H(View view, ImageView icon, TextView name, TextView packageName, TextView play) {
-            super(view);
+        Holder(View itemView, ImageView icon, TextView name,
+               TextView packageName, TextView play) {
+            super(itemView);
             this.icon = icon;
             this.name = name;
             this.packageName = packageName;
