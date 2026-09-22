@@ -2,8 +2,12 @@ package com.catcore.ctrlmietze.multitask.xposed;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,6 +25,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public final class MultiTaskHook implements IXposedHookLoadPackage {
     private static final String SELF = "com.catcore.ctrlmietze.multitask";
+    private static volatile long stabilityWindowUntil;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -42,23 +47,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             return;
         }
 
-        try {
-            XposedHelpers.findAndHookMethod(
-                    Activity.class,
-                    "onPostResume",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            try {
-                                injectQuickButton((Activity) param.thisObject);
-                            } catch (Throwable t) {
-                                XposedBridge.log("MultiTask quick button: " + t);
-                            }
-                        }
-                    });
-        } catch (Throwable t) {
-            XposedBridge.log("MultiTask target hook: " + t);
-        }
+        hookScopedTargetApp();
     }
 
     private static void hookSystemFramework(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -80,16 +69,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                         if (!intent.getBooleanExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, false)) {
                             continue;
                         }
-
-                        int flags = intent.getFlags();
-                        flags |= Intent.FLAG_ACTIVITY_NEW_TASK;
-                        flags |= Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
-                        flags |= Intent.FLAG_ACTIVITY_NEW_DOCUMENT;
-                        flags |= Intent.FLAG_ACTIVITY_RETAIN_IN_RECENTS;
-                        flags &= ~Intent.FLAG_ACTIVITY_CLEAR_TOP;
-                        flags &= ~Intent.FLAG_ACTIVITY_REORDER_TO_FRONT;
-                        flags &= ~Intent.FLAG_ACTIVITY_SINGLE_TOP;
-                        intent.setFlags(flags);
+                        reinforce(intent);
                         break;
                     }
                 }
@@ -101,6 +81,95 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log("MultiTask framework hook: " + t);
         }
+    }
+
+    private static void hookScopedTargetApp() {
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
+                    "onCreate",
+                    Bundle.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            Activity activity = (Activity) param.thisObject;
+                            Intent incoming = activity.getIntent();
+                            if (incoming != null
+                                    && incoming.getBooleanExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, false)
+                                    && incoming.getBooleanExtra(TaskLauncher.EXTRA_MAX_STABILITY, false)) {
+                                stabilityWindowUntil = SystemClock.elapsedRealtime() + 5000L;
+                                XposedBridge.log("MultiTask: Max Stability redirect window active for "
+                                        + activity.getPackageName());
+                            }
+                        }
+                    });
+
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
+                    "startActivityForResult",
+                    Intent.class,
+                    int.class,
+                    Bundle.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (SystemClock.elapsedRealtime() > stabilityWindowUntil) return;
+                            Activity activity = (Activity) param.thisObject;
+                            Intent next = (Intent) param.args[0];
+                            if (next == null || !belongsToSamePackage(activity, next)) return;
+
+                            reinforce(next);
+                            next.putExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, true);
+                            next.putExtra(TaskLauncher.EXTRA_MAX_STABILITY, true);
+                        }
+                    });
+
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
+                    "onPostResume",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            try {
+                                injectQuickButton((Activity) param.thisObject);
+                            } catch (Throwable t) {
+                                XposedBridge.log("MultiTask quick button: " + t);
+                            }
+                        }
+                    });
+        } catch (Throwable t) {
+            XposedBridge.log("MultiTask target hook: " + t);
+        }
+    }
+
+    private static boolean belongsToSamePackage(Activity activity, Intent intent) {
+        try {
+            if (intent.getComponent() != null) {
+                return activity.getPackageName().equals(intent.getComponent().getPackageName());
+            }
+            if (intent.getPackage() != null) {
+                return activity.getPackageName().equals(intent.getPackage());
+            }
+            ResolveInfo info = activity.getPackageManager()
+                    .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            return info != null
+                    && info.activityInfo != null
+                    && activity.getPackageName().equals(info.activityInfo.packageName);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static void reinforce(Intent intent) {
+        int flags = intent.getFlags();
+        flags |= Intent.FLAG_ACTIVITY_NEW_TASK;
+        flags |= Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
+        flags |= Intent.FLAG_ACTIVITY_NEW_DOCUMENT;
+        flags |= Intent.FLAG_ACTIVITY_RETAIN_IN_RECENTS;
+        flags &= ~Intent.FLAG_ACTIVITY_CLEAR_TOP;
+        flags &= ~Intent.FLAG_ACTIVITY_REORDER_TO_FRONT;
+        flags &= ~Intent.FLAG_ACTIVITY_SINGLE_TOP;
+        intent.setFlags(flags);
     }
 
     private static void injectQuickButton(Activity activity) {
