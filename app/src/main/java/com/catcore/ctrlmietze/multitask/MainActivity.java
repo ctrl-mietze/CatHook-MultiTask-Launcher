@@ -224,6 +224,35 @@ public final class MainActivity extends AppCompatActivity {
         return EnvironmentProbe.isXposedActive();
     }
 
+    public boolean isLaunchFrameworkReady() {
+        return isXposedActive() && EnvironmentProbe.isSystemHookActive(this);
+    }
+
+    public void showFrameworkRequired() {
+        boolean xposed = isXposedActive();
+        boolean systemHook = EnvironmentProbe.isSystemHookActive(this);
+        int targetStep = !xposed ? 2 : 3;
+
+        String message = !xposed
+                ? "MultiTask's built-in LSPosed module is not active. Enable MultiTask and keep MultiTask + System Framework in scope."
+                : "LSPosed is active, but the Android System Framework hook is not detected for this boot. Check the System Framework scope; after first activation a reboot may be required.";
+
+        new AlertDialog.Builder(this)
+                .setTitle(!xposed ? "LSPosed activation required" : "System hook required")
+                .setMessage(message)
+                .setNegativeButton("Close", null)
+                .setPositiveButton("Open setup", (d, w) -> {
+                    SettingsStore.setOnboardingComplete(this, false);
+                    getSharedPreferences("multitask_first_start", MODE_PRIVATE)
+                            .edit().putInt("step", targetStep).apply();
+                    Intent i = new Intent(this, FirstStartActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                    finishAffinity();
+                })
+                .show();
+    }
+
     public void showXposedRequired() {
         new AlertDialog.Builder(this)
                 .setTitle("LSPosed activation required")
