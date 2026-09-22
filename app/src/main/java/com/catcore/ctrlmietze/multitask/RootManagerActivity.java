@@ -78,7 +78,7 @@ public final class RootManagerActivity extends AppCompatActivity {
         hero.addView(heroText, htp);
 
         if (!pluginInstalled) {
-            Button github = CatUi.primaryButton(this, "Open KernelSU plugin on GitHub");
+            Button github = CatUi.primaryButton(this, "Download Root Helper from GitHub");
             LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-1, dp(52));
             gp.topMargin = dp(15);
             hero.addView(github, gp);
@@ -157,7 +157,7 @@ public final class RootManagerActivity extends AppCompatActivity {
     private void openGithub() {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://github.com/ctrl-mietze/CatHook-MultiTask-Launcher/tree/v2-major-rework/kernelsu-module")));
+                    Uri.parse("https://github.com/ctrl-mietze/CatHook-MultiTask-Launcher/actions/workflows/kernelsu-helper.yml")));
         } catch (Throwable ignored) {
         }
     }
