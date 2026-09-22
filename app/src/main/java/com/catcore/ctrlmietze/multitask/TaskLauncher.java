@@ -107,11 +107,18 @@ public final class TaskLauncher {
             String[] parts = cached.split("\\n", 2);
             String strategy = parts[0];
             String component = parts.length > 1 ? parts[1] : "";
-            progress(context, progress, "Using the known working start method…");
-            LaunchResult r = runStrategy(context, strategy, pkg, component, childTasks);
-            if (r.ok) return r;
-            reasons.add("Cached method: " + r.message);
-            cache.edit().remove(pkg).apply();
+
+            boolean privilegedCached = strategy.startsWith("root_")
+                    || "monkey".equals(strategy);
+            if (privilegedCached && !(compatibility || maxStability)) {
+                cache.edit().remove(pkg).apply();
+            } else {
+                progress(context, progress, "Using the known working compatibility method…");
+                LaunchResult r = runStrategy(context, strategy, pkg, component, childTasks);
+                if (r.ok) return r;
+                reasons.add("Cached method: " + r.message);
+                cache.edit().remove(pkg).apply();
+            }
         }
 
         progress(context, progress, "Trying the safe Android compatibility path…");
