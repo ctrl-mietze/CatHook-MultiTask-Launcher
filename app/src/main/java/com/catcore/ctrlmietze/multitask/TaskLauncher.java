@@ -110,7 +110,7 @@ public final class TaskLauncher {
 
             boolean privilegedCached = strategy.startsWith("root_")
                     || "monkey".equals(strategy);
-            if (privilegedCached && !(compatibility || maxStability)) {
+            if (privilegedCached && !maxStability) {
                 cache.edit().remove(pkg).apply();
             } else {
                 progress(context, progress, "Using the known working compatibility method…");
@@ -144,8 +144,8 @@ public final class TaskLauncher {
         // Root ActivityManager strategies are intentionally NOT part of the
         // normal V2 own-task path anymore. They are compatibility fallbacks
         // only, after the LSPosed system_server bridge has already failed.
-        if (compatibility || maxStability) {
-            progress(context, progress, "Trying compatibility fallbacks…");
+        if (maxStability) {
+            progress(context, progress, "Trying explicit Max Stability root fallbacks…");
 
             if (SettingsStore.rootHelperEnabled(context)
                     && SettingsStore.rootTaskStart(context)
