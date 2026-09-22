@@ -104,7 +104,19 @@ public final class SettingsActivity extends AppCompatActivity {
                             Toast.LENGTH_LONG).show();
                 }
             } else {
-                stopService(new Intent(this, CatCoreFrameworkService.class));
+                button.setChecked(true);
+                CatDialog.show(this,
+                        "FRAMEWORK PROTECTION",
+                        "Disable CatCore Framework?",
+                        "Not recommended. App catalog caching, live framework sessions, Stability Guard and recovery monitoring will stop until the framework is enabled again.",
+                        "Keep active",
+                        "Disable anyway",
+                        () -> {
+                            button.setOnCheckedChangeListener(null);
+                            button.setChecked(false);
+                            SettingsStore.setFrameworkEnabled(this, false);
+                            stopService(new Intent(this, CatCoreFrameworkService.class));
+                        });
             }
         });
 
@@ -226,7 +238,7 @@ public final class SettingsActivity extends AppCompatActivity {
 
         rootHeader.addView(CatUi.text(
                 this,
-                pluginInstalled ? "Optional Root Helper connected" : "Optional Root Helper",
+                pluginInstalled ? "Optional Root Module connected" : "Optional Root Module",
                 16, CatUi.TEXT, true),
                 new LinearLayout.LayoutParams(0, -2, 1));
         rootHeader.addView(CatUi.pill(
@@ -237,15 +249,22 @@ public final class SettingsActivity extends AppCompatActivity {
         TextView rootInfo = CatUi.text(
                 this,
                 pluginInstalled
-                        ? "Advanced root-backed session controls are available. They remain optional and session-based."
-                        : "MultiTask V2 works without the KernelSU helper. Install it only if you want extra root-backed session controls.",
+                        ? "Optional Root Module is active. Tap this card for module details and root-backed session controls."
+                        : "MultiTask V2 works without the optional root module. Install/activate it in KernelSU-compatible module management to unlock the Root Helper broker.",
                 12, CatUi.MUTED, false);
         LinearLayout.LayoutParams rip = new LinearLayout.LayoutParams(-1, -2);
         rip.topMargin = dp(8);
         rootStatus.addView(rootInfo, rip);
+        rootStatus.setOnClickListener(v -> {
+            if (pluginInstalled) startActivity(new Intent(this, RootManagerActivity.class));
+            else CatDialog.show(this, "OPTIONAL ROOT MODULE", "Module not active",
+                    "Install and activate the CatCore root module first. The Root Helper master switch stays locked until the module broker is detected.",
+                    "Close", null, null);
+        });
+        CatUi.pressScale(rootStatus);
 
         if (!pluginInstalled) {
-            Button helperBuilds = CatUi.secondaryButton(this, "Open Root Helper builds");
+            Button helperBuilds = CatUi.secondaryButton(this, "Open Root Module builds");
             LinearLayout.LayoutParams hbp = new LinearLayout.LayoutParams(-1, dp(48));
             hbp.topMargin = dp(12);
             rootStatus.addView(helperBuilds, hbp);
@@ -335,6 +354,9 @@ public final class SettingsActivity extends AppCompatActivity {
         developer.setOnClickListener(v -> openDeveloperOptions());
 
         setContentView(scroll);
+        scroll.setAlpha(0f);
+        scroll.setTranslationY(dp(18));
+        scroll.animate().alpha(1f).translationY(0f).setDuration(260L).start();
     }
 
     private void addModeCard(String name, String badge, String detail, int mode) {
@@ -458,17 +480,12 @@ public final class SettingsActivity extends AppCompatActivity {
             startActivity(new Intent(this, DeveloperOptionsActivity.class));
             return;
         }
-
-        new AlertDialog.Builder(this)
-                .setTitle("Developer Options")
-                .setMessage("These controls can disable individual launch methods and make apps fail to open. "
-                        + "They are intended for debugging and compatibility research. Continue?")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("I understand", (d, w) -> {
+        CatDialog.show(this, "ADVANCED", "Developer Options",
+                "These controls can disable individual launch methods and make apps fail to open. They are intended for debugging and compatibility research.",
+                "Cancel", "I understand", () -> {
                     SettingsStore.setDeveloperWarningAccepted(this, true);
                     startActivity(new Intent(this, DeveloperOptionsActivity.class));
-                })
-                .show();
+                });
     }
 
     private void addSection(String value) {
