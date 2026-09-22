@@ -83,6 +83,9 @@
         <activity
             android:name=".TaskManagerActivity"
             android:exported="false" />
+        <activity
+            android:name=".TaskWindowActivity"
+            android:exported="false" />
 
         <activity
             android:name=".AppStarterActivity"
