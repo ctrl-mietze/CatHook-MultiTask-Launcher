@@ -46,6 +46,10 @@ public final class TaskManagerActivity extends AppCompatActivity {
     private TextView summary;
     private TextView allTab;
     private TextView multiTab;
+    private TextView metricApps;
+    private TextView metricTasks;
+    private TextView metricMulti;
+    private TextView metricRam;
     private boolean multiOnly;
     private boolean loading;
     private List<TaskInspector.TaskInfo> current = new ArrayList<>();
@@ -114,6 +118,17 @@ public final class TaskManagerActivity extends AppCompatActivity {
         hhp.topMargin = dp(6);
         hero.addView(heroHint, hhp);
 
+        LinearLayout metricRow = new LinearLayout(this);
+        metricRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams mrp = new LinearLayout.LayoutParams(-1, dp(62));
+        mrp.topMargin = dp(14);
+        hero.addView(metricRow, mrp);
+
+        metricApps = addHeroMetric(metricRow, "APPS");
+        metricTasks = addHeroMetric(metricRow, "TASKS");
+        metricMulti = addHeroMetric(metricRow, "MULTI");
+        metricRam = addHeroMetric(metricRow, "RAM");
+
         LinearLayout tabs = new LinearLayout(this);
         tabs.setPadding(dp(4), dp(4), dp(4), dp(4));
         tabs.setBackground(CatUi.shape(this, CatUi.SURFACE, 18));
@@ -155,6 +170,28 @@ public final class TaskManagerActivity extends AppCompatActivity {
         scroll.addView(listHost, new ScrollView.LayoutParams(-1, -2));
 
         setContentView(root);
+    }
+
+    private TextView addHeroMetric(LinearLayout row, String label) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setBackground(CatUi.shape(this, Color.argb(100, 20, 26, 48), 15));
+
+        TextView value = CatUi.text(this, "--", 16, CatUi.TEXT, true);
+        value.setGravity(Gravity.CENTER);
+        box.addView(value);
+
+        TextView caption = CatUi.text(
+                this, label, 8, Color.rgb(155, 171, 214), true);
+        caption.setLetterSpacing(0.08f);
+        caption.setGravity(Gravity.CENTER);
+        box.addView(caption);
+
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -1, 1);
+        p.rightMargin = dp(6);
+        row.addView(box, p);
+        return value;
     }
 
     private TextView tab(String label, boolean active) {
@@ -214,10 +251,13 @@ public final class TaskManagerActivity extends AppCompatActivity {
             listHost.addView(taskRow(first, tasks));
         }
 
-        summary.setText(appCount + " app" + (appCount == 1 ? "" : "s")
-                + " · " + current.size() + " task" + (current.size() == 1 ? "" : "s")
-                + " · " + formatRam(totalRam)
-                + " · " + String.format(Locale.US, "%.1f%% CPU", totalCpu));
+        summary.setText("Live Android task state · "
+                + String.format(Locale.US, "%.1f%% CPU", totalCpu));
+
+        metricApps.setText(String.valueOf(appCount));
+        metricTasks.setText(String.valueOf(current.size()));
+        metricMulti.setText(String.valueOf(multiCount));
+        metricRam.setText(formatRamCompact(totalRam));
 
         if (appCount == 0) {
             LinearLayout empty = CatUi.card(this);
@@ -515,6 +555,15 @@ public final class TaskManagerActivity extends AppCompatActivity {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    private static String formatRamCompact(long bytes) {
+        if (bytes <= 0L) return "--";
+        double mib = bytes / 1048576d;
+        if (mib >= 1024d) {
+            return String.format(Locale.US, "%.1fG", mib / 1024d);
+        }
+        return String.format(Locale.US, "%.0fM", mib);
     }
 
     private static String formatRam(long bytes) {
