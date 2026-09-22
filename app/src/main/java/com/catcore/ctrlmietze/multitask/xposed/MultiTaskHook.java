@@ -572,6 +572,10 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                         context.getContentResolver(),
                         EnvironmentProbe.GLOBAL_HOOK_PROTOCOL,
                         EnvironmentProbe.CURRENT_HOOK_PROTOCOL);
+                Settings.Global.putInt(
+                        context.getContentResolver(),
+                        EnvironmentProbe.GLOBAL_HOOK_PID,
+                        android.os.Process.myPid());
                 lastSystemHeartbeatWrite = now;
             }
         } catch (Throwable ignored) {
