@@ -15,6 +15,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
+import com.catcore.ctrlmietze.multitask.window.WindowFramework;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -51,6 +52,8 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
     }
 
     private static void hookSystemFramework(XC_LoadPackage.LoadPackageParam lpparam) {
+        hookV2VirtualWindowPermission(lpparam);
+
         try {
             Class<?> service = XposedHelpers.findClassIfExists(
                     "com.android.server.wm.ActivityTaskManagerService",
@@ -80,6 +83,105 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             XposedBridge.log("MultiTask: System Framework task reinforcement active");
         } catch (Throwable t) {
             XposedBridge.log("MultiTask framework hook: " + t);
+        }
+    }
+
+    private static void hookV2VirtualWindowPermission(
+            XC_LoadPackage.LoadPackageParam lpparam) {
+        hookV2SupervisorClass(
+                "com.android.server.wm.ActivityTaskSupervisor",
+                lpparam.classLoader);
+        hookV2SupervisorClass(
+                "com.android.server.wm.ActivityStackSupervisor",
+                lpparam.classLoader);
+    }
+
+    private static void hookV2SupervisorClass(String className, ClassLoader loader) {
+        try {
+            Class<?> supervisor = XposedHelpers.findClassIfExists(className, loader);
+            if (supervisor == null) return;
+
+            XposedBridge.hookAllMethods(
+                    supervisor,
+                    "isCallerAllowedToLaunchOnDisplay",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (param.args == null || param.args.length < 4) return;
+                            if (!(param.args[1] instanceof Integer)
+                                    || !(param.args[2] instanceof Integer)) {
+                                return;
+                            }
+
+                            int callingUid = (Integer) param.args[1];
+                            int displayId = (Integer) param.args[2];
+                            if (displayId <= 0) return;
+
+                            if (isOwnedV2WindowDisplay(param.thisObject, displayId, callingUid)) {
+                                param.setResult(true);
+                            }
+                        }
+                    });
+
+            XposedBridge.log("MultiTask V2: virtual-window permission hook active on "
+                    + className);
+        } catch (Throwable t) {
+            XposedBridge.log("MultiTask V2 display permission hook: " + t);
+        }
+    }
+
+    private static boolean isOwnedV2WindowDisplay(
+            Object supervisor, int displayId, int callingUid) {
+        try {
+            Object root;
+            try {
+                root = XposedHelpers.getObjectField(supervisor, "mRootWindowContainer");
+            } catch (Throwable oldAndroid) {
+                root = XposedHelpers.getObjectField(supervisor, "mRootActivityContainer");
+            }
+
+            Object displayContent = XposedHelpers.callMethod(
+                    root, "getDisplayContentOrCreate", displayId);
+            if (displayContent == null) return false;
+
+            Object display = XposedHelpers.getObjectField(displayContent, "mDisplay");
+            String name = String.valueOf(XposedHelpers.callMethod(display, "getName"));
+            if (!name.startsWith(WindowFramework.DISPLAY_PREFIX)) return false;
+
+            int ownerUid = -1;
+            try {
+                ownerUid = ((Number) XposedHelpers.callMethod(
+                        display, "getOwnerUid")).intValue();
+            } catch (Throwable hiddenMethod) {
+                Object info = XposedHelpers.callMethod(display, "getDisplayInfo");
+                ownerUid = XposedHelpers.getIntField(info, "ownerUid");
+            }
+
+            if (ownerUid < 0) return false;
+
+            Object service = XposedHelpers.getObjectField(supervisor, "mService");
+            android.content.Context context = (android.content.Context)
+                    XposedHelpers.getObjectField(service, "mContext");
+
+            String[] packages = context.getPackageManager().getPackagesForUid(ownerUid);
+            boolean ownedByMultiTask = false;
+            if (packages != null) {
+                for (String pkg : packages) {
+                    if (SELF.equals(pkg)) {
+                        ownedByMultiTask = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!ownedByMultiTask) return false;
+
+            // The normal V2 path calls from the MultiTask UID itself. Root/shell are
+            // accepted only as a compatibility fallback and only for our owned display.
+            return callingUid == ownerUid || callingUid == 0 || callingUid == 2000;
+        } catch (Throwable t) {
+            XposedBridge.log("MultiTask V2 display ownership check: " + t);
+            return false;
         }
     }
 
