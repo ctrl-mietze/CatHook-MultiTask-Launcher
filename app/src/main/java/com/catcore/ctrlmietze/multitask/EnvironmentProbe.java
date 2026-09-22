@@ -9,6 +9,9 @@ public final class EnvironmentProbe {
             "catcore_multitask_system_hook_boot";
     public static final String GLOBAL_HOOK_UPTIME =
             "catcore_multitask_system_hook_uptime";
+    public static final String GLOBAL_HOOK_PROTOCOL =
+            "catcore_multitask_system_hook_protocol";
+    public static final int CURRENT_HOOK_PROTOCOL = 3;
 
     private EnvironmentProbe() {}
 
@@ -29,14 +32,26 @@ public final class EnvironmentProbe {
                     context.getContentResolver(), GLOBAL_HOOK_BOOT, -2);
             long hookUptime = Settings.Global.getLong(
                     context.getContentResolver(), GLOBAL_HOOK_UPTIME, -1L);
+            int hookProtocol = Settings.Global.getInt(
+                    context.getContentResolver(), GLOBAL_HOOK_PROTOCOL, -1);
             long now = SystemClock.elapsedRealtime();
             return currentBoot >= 0
                     && currentBoot == hookBoot
+                    && hookProtocol == CURRENT_HOOK_PROTOCOL
                     && hookUptime >= 0L
                     && hookUptime <= now
                     && now - hookUptime <= 5 * 60_000L;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    public static int systemHookProtocol(Context context) {
+        try {
+            return Settings.Global.getInt(
+                    context.getContentResolver(), GLOBAL_HOOK_PROTOCOL, -1);
+        } catch (Throwable ignored) {
+            return -1;
         }
     }
 
