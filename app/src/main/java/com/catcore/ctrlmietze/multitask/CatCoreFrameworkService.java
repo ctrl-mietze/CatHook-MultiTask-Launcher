@@ -86,7 +86,12 @@ public final class CatCoreFrameworkService extends Service {
     }
 
     public static void start(Context context) {
+        updateStatus(context, "Framework active");
+    }
+
+    public static void updateStatus(Context context, String status) {
         Intent intent = new Intent(context, CatCoreFrameworkService.class);
+        intent.putExtra("status", status == null ? "Framework active" : status);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
         else context.startService(intent);
     }
