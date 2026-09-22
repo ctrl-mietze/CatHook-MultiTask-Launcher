@@ -217,7 +217,7 @@ public final class SettingsActivity extends AppCompatActivity {
     private Button button(String label) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextAllCaps(false);
+        b.setAllCaps(false);
         b.setTextColor(Color.WHITE);
         b.setGravity(Gravity.CENTER);
         b.setBackground(shape(Color.rgb(78, 108, 232), dp(15)));
