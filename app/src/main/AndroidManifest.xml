@@ -76,6 +76,9 @@
         <activity
             android:name=".SettingsActivity"
             android:exported="false" />
+        <activity
+            android:name=".FrameworkViewerActivity"
+            android:exported="false" />
 
         <activity
             android:name=".TaskManagerActivity"
