@@ -122,6 +122,17 @@ public final class SettingsActivity extends AppCompatActivity {
                 value -> SettingsStore.setCompatibilityMode(this, value));
 
         addSwitch(
+                "Full-scan compatibility",
+                "Off by default. CatCore Framework inventories launcher activities and task-relevant manifest behavior for user apps and the supported Google/system-app allowlist, then stores the report only in MultiTask app data.",
+                SettingsStore.fullScanMode(this),
+                value -> {
+                    SettingsStore.setFullScanMode(this, value);
+                    if (value && SettingsStore.frameworkEnabled(this)) {
+                        CatCoreFrameworkService.requestCompatibilityScan(this);
+                    }
+                });
+
+        addSwitch(
                 "Max Stability",
                 "Uses the full launch chain and stronger LSPosed reinforcement for difficult apps.",
                 SettingsStore.maxStability(this),
@@ -140,17 +151,41 @@ public final class SettingsActivity extends AppCompatActivity {
                 SettingsStore.restoreRuntime(this),
                 value -> SettingsStore.setRestoreRuntime(this, value));
 
+        addSwitch(
+                "Manual process management",
+                "Off = CatCore Framework manages process compatibility automatically. On = the controls below become editable. Turning it off hands control back to the framework.",
+                SettingsStore.manualProcessTuning(this),
+                value -> {
+                    SettingsStore.setManualProcessTuning(this, value);
+                    RuntimeTuning.applyAsync(this, true, null);
+                    build();
+                });
+
+        boolean manualProcesses = SettingsStore.manualProcessTuning(this);
+
         addRuntimeNumber(
                 "Max cached processes",
                 "0 = Android default · 0–512",
                 SettingsStore.maxCachedProcesses(this),
-                0, 512, true);
+                0, 512, 0, manualProcesses);
 
         addRuntimeNumber(
                 "Max phantom processes",
                 "0 = Android default · 0–128",
                 SettingsStore.maxPhantomProcesses(this),
-                0, 128, false);
+                0, 128, 1, manualProcesses);
+
+        addRuntimeNumber(
+                "Background process target",
+                "0 = framework/default · 0–64",
+                SettingsStore.backgroundProcessLimit(this),
+                0, 64, 2, manualProcesses);
+
+        addRuntimeNumber(
+                "Empty-process reserve",
+                "0 = framework/default · 0–100%",
+                SettingsStore.emptyProcessPercent(this),
+                0, 100, 3, manualProcesses);
 
         addSection("LSPOSED / XPOSED");
         LinearLayout xposed = CatUi.card(this);
@@ -334,7 +369,7 @@ public final class SettingsActivity extends AppCompatActivity {
     }
 
     private void addRuntimeNumber(String title, String subtitle, int value,
-                                  int min, int max, boolean cached) {
+                                  int min, int max, int kind, boolean enabled) {
         LinearLayout card = CatUi.card(this);
         root.addView(card, CatUi.cardParams(this));
         card.addView(CatUi.text(this, title, 15, CatUi.TEXT, true));
@@ -347,7 +382,9 @@ public final class SettingsActivity extends AppCompatActivity {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
         input.setText(String.valueOf(value));
-        input.setTextColor(CatUi.TEXT);
+        input.setEnabled(enabled);
+        input.setAlpha(enabled ? 1f : 0.45f);
+        input.setTextColor(enabled ? CatUi.TEXT : CatUi.MUTED);
         input.setHintTextColor(CatUi.MUTED);
         input.setSingleLine(true);
         input.setPadding(dp(14), 0, dp(14), 0);
@@ -359,13 +396,13 @@ public final class SettingsActivity extends AppCompatActivity {
         input.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                scheduleRuntimeSave(input, min, max, cached);
+                if (enabled) scheduleRuntimeSave(input, min, max, kind);
             }
             public void afterTextChanged(Editable s) {}
         });
     }
 
-    private void scheduleRuntimeSave(EditText input, int min, int max, boolean cached) {
+    private void scheduleRuntimeSave(EditText input, int min, int max, int kind) {
         if (runtimeApply != null) debounce.removeCallbacks(runtimeApply);
         runtimeApply = () -> {
             int value;
@@ -380,8 +417,10 @@ public final class SettingsActivity extends AppCompatActivity {
                 return;
             }
 
-            if (cached) SettingsStore.setMaxCachedProcesses(this, value);
-            else SettingsStore.setMaxPhantomProcesses(this, value);
+            if (kind == 0) SettingsStore.setMaxCachedProcesses(this, value);
+            else if (kind == 1) SettingsStore.setMaxPhantomProcesses(this, value);
+            else if (kind == 2) SettingsStore.setBackgroundProcessLimit(this, value);
+            else SettingsStore.setEmptyProcessPercent(this, value);
 
             RuntimeTuning.applyAsync(this, true, null);
         };
