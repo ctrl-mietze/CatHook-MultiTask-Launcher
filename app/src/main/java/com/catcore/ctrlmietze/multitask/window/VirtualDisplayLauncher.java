@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import com.catcore.ctrlmietze.multitask.RootShell;
+import com.catcore.ctrlmietze.multitask.SettingsStore;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
 
 import java.util.concurrent.ExecutorService;
@@ -37,15 +38,28 @@ final class VirtualDisplayLauncher {
                 | Intent.FLAG_ACTIVITY_RETAIN_IN_RECENTS);
         intent.putExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, true);
 
-        try {
-            ActivityOptions options = ActivityOptions.makeBasic();
-            options.setLaunchDisplayId(displayId);
-            host.startActivity(intent, options.toBundle());
-            callback.onResult(true, "Started on virtual display " + displayId + ".");
+        String directReason = "Disabled in Developer Options.";
+        if (SettingsStore.methodEnabled(host, SettingsStore.METHOD_VIRTUAL_DIRECT)) {
+            try {
+                ActivityOptions options = ActivityOptions.makeBasic();
+                options.setLaunchDisplayId(displayId);
+                host.startActivity(intent, options.toBundle());
+                callback.onResult(true, "Started on virtual display " + displayId + ".");
+                return;
+            } catch (Throwable directError) {
+                directReason = reason(directError);
+            }
+        }
+
+        final String directFailure = directReason;
+        if (!SettingsStore.methodEnabled(host, SettingsStore.METHOD_VIRTUAL_ROOT)) {
+            callback.onResult(false,
+                    "Direct display launch: " + directFailure
+                            + "\nRoot display launch: disabled in Developer Options.");
             return;
-        } catch (Throwable directError) {
-            String directReason = reason(directError);
-            EXEC.execute(() -> {
+        }
+
+        EXEC.execute(() -> {
                 String component = intent.getComponent() == null
                         ? "" : intent.getComponent().flattenToString();
                 String command;
@@ -66,13 +80,12 @@ final class VirtualDisplayLauncher {
                 RootShell.Result result = RootShell.run(command, 8);
                 String message = result.ok
                         ? "Started through the root display launcher."
-                        : "Direct display launch: " + directReason
+                        : "Direct display launch: " + directFailure
                         + "\nRoot display launch: " + RootShell.shortReason(result);
 
-                new Handler(Looper.getMainLooper()).post(
-                        () -> callback.onResult(result.ok, message));
-            });
-        }
+            new Handler(Looper.getMainLooper()).post(
+                    () -> callback.onResult(result.ok, message));
+        });
     }
 
     private static Intent resolveIntent(Activity host, String pkg, String activityName) {
