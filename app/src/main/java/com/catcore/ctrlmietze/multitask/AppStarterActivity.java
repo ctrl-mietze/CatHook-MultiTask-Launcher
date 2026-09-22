@@ -2,9 +2,6 @@ package com.catcore.ctrlmietze.multitask;
 
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.text.InputType;
@@ -19,16 +16,15 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.text.Collator;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public final class AppStarterActivity extends AppCompatActivity {
     private volatile boolean rootReady;
     private AlertDialog compatibilityDialog;
     private TextView compatibilityText;
+    private AppAdapter adapter;
+    private TextView appCount;
+    private EditText searchBox;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -36,7 +32,7 @@ public final class AppStarterActivity extends AppCompatActivity {
         CatUi.applyWindow(this);
         rootReady = EnvironmentProbe.hasRoot();
 
-        List<AppEntry> apps = loadApps();
+        List<AppEntry> apps = AppCatalog.loadCached(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -62,9 +58,10 @@ public final class AppStarterActivity extends AppCompatActivity {
                 "Choose an app and its exact task target",
                 12, CatUi.MUTED, false));
 
-        TextView count = CatUi.pill(this,
-                String.valueOf(apps.size()), Color.rgb(48, 57, 82));
-        header.addView(count, new LinearLayout.LayoutParams(dp(58), dp(34)));
+        appCount = CatUi.pill(this,
+                apps.isEmpty() ? "…" : String.valueOf(apps.size()),
+                Color.rgb(48, 57, 82));
+        header.addView(appCount, new LinearLayout.LayoutParams(dp(58), dp(34)));
 
         LinearLayout info = CatUi.card(this);
         info.setBackground(CatUi.dashboard(this));
@@ -82,20 +79,20 @@ public final class AppStarterActivity extends AppCompatActivity {
         hp.topMargin = dp(5);
         info.addView(hint, hp);
 
-        EditText search = new EditText(this);
-        search.setSingleLine(true);
-        search.setHint("Search apps or packages");
-        search.setTextColor(CatUi.TEXT);
-        search.setHintTextColor(Color.rgb(118, 131, 156));
-        search.setTextSize(14);
-        search.setPadding(dp(16), 0, dp(16), 0);
-        search.setBackground(CatUi.stroke(
+        searchBox = new EditText(this);
+        searchBox.setSingleLine(true);
+        searchBox.setHint("Search apps or packages");
+        searchBox.setTextColor(CatUi.TEXT);
+        searchBox.setHintTextColor(Color.rgb(118, 131, 156));
+        searchBox.setTextSize(14);
+        searchBox.setPadding(dp(16), 0, dp(16), 0);
+        searchBox.setBackground(CatUi.stroke(
                 this, CatUi.SURFACE, 18, Color.rgb(42, 49, 69)));
         LinearLayout.LayoutParams searchParams =
                 new LinearLayout.LayoutParams(-1, dp(52));
         searchParams.topMargin = dp(12);
         searchParams.bottomMargin = dp(4);
-        root.addView(search, searchParams);
+        root.addView(searchBox, searchParams);
 
         RecyclerView list = new RecyclerView(this);
         list.setLayoutManager(new LinearLayoutManager(this));
@@ -105,22 +102,35 @@ public final class AppStarterActivity extends AppCompatActivity {
 
         setContentView(root);
 
-        AppAdapter adapter = new AppAdapter(this, apps);
+        adapter = new AppAdapter(this, apps);
         list.setAdapter(adapter);
 
-        search.addTextChangedListener(new android.text.TextWatcher() {
+        searchBox.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 adapter.filter(s == null ? "" : s.toString());
             }
             public void afterTextChanged(android.text.Editable editable) {}
         });
+
+        if (apps.isEmpty()) {
+            AppCatalog.refreshAsync(this, true, this::applyCatalog);
+        } else if (SettingsStore.frameworkEnabled(this)) {
+            CatCoreFrameworkService.requestCatalogRefresh(this);
+        } else if (AppCatalog.needsRefresh(this)) {
+            AppCatalog.refreshAsync(this, true, this::applyCatalog);
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         new Thread(() -> rootReady = EnvironmentProbe.hasRoot(), "CatCore-root-probe").start();
+
+        List<AppEntry> cached = AppCatalog.loadCached(this);
+        if (!cached.isEmpty() && adapter != null) {
+            applyCatalog(cached);
+        }
     }
 
     public boolean isLaunchFrameworkReady() {
@@ -254,43 +264,13 @@ public final class AppStarterActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    private List<AppEntry> loadApps() {
-        PackageManager pm = getPackageManager();
-        Intent query = new Intent(Intent.ACTION_MAIN)
-                .addCategory(Intent.CATEGORY_LAUNCHER);
-        Map<String, AppEntry> unique = new LinkedHashMap<>();
-
-        for (ResolveInfo info : pm.queryIntentActivities(
-                query, PackageManager.MATCH_ALL)) {
-            if (info.activityInfo == null) continue;
-            ApplicationInfo ai = info.activityInfo.applicationInfo;
-            if (getPackageName().equals(ai.packageName)) continue;
-
-            boolean system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-            if (system && !SystemAppAllowlist.isAllowed(ai.packageName)) continue;
-
-            String activity = info.activityInfo.name;
-            try {
-                Intent launch = pm.getLaunchIntentForPackage(ai.packageName);
-                if (launch != null && launch.getComponent() != null) {
-                    activity = launch.getComponent().getClassName();
-                }
-            } catch (Throwable ignored) {
-            }
-
-            CharSequence label = info.loadLabel(pm);
-            AppEntry entry = new AppEntry(
-                    label == null ? ai.packageName : label.toString(),
-                    ai.packageName,
-                    activity,
-                    info.loadIcon(pm));
-            unique.putIfAbsent(ai.packageName, entry);
-        }
-
-        ArrayList<AppEntry> out = new ArrayList<>(unique.values());
-        Collator collator = Collator.getInstance();
-        out.sort((a, b) -> collator.compare(a.label, b.label));
-        return out;
+    private void applyCatalog(List<AppEntry> apps) {
+        if (apps == null || adapter == null || appCount == null) return;
+        adapter.replaceAll(apps);
+        String query = searchBox == null || searchBox.getText() == null
+                ? "" : searchBox.getText().toString();
+        adapter.filter(query);
+        appCount.setText(String.valueOf(apps.size()));
     }
 
     private int dp(int value) {
