@@ -292,7 +292,7 @@ public final class FirstStartActivity extends AppCompatActivity {
         LinearLayout own = selectableCard(
                 "Start as app's own task",
                 "Native identity",
-                "Keeps the target app in its own Android task and uses the stronger root + LSPosed launch chain.",
+                "Keeps the target app in its own Android task. V2 uses the built-in LSPosed system_server bridge as the primary start path and verifies the real task count.",
                 SettingsStore.startMode(this) == SettingsStore.MODE_APP_OWN_TASK);
         body.addView(own, CatUi.cardParams(this));
         own.setOnClickListener(v -> {
