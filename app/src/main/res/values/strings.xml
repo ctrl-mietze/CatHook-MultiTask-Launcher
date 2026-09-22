@@ -1,1 +1,4 @@
-<resources><string name="app_name">CatCore MultiTask</string><string name="module_description">Startet dieselbe App mehrfach als getrennte Android-Tasks. Optionaler LSPosed-Schnellbutton in ausgewählten Apps.</string></resources>
+<resources>
+    <string name="app_name">MultiTask</string>
+    <string name="module_description">Fast multi-task launcher with LSPosed System Framework reinforcement, learned launch strategies and compatibility fallbacks.</string>
+</resources>
