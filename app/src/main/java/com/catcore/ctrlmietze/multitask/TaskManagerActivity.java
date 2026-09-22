@@ -52,6 +52,8 @@ public final class TaskManagerActivity extends AppCompatActivity {
     private TextView metricRam;
     private boolean multiOnly;
     private boolean loading;
+    private ScrollView taskScroll;
+    private int pendingScrollY;
     private List<TaskInspector.TaskInfo> current = new ArrayList<>();
 
     @Override
@@ -72,6 +74,12 @@ public final class TaskManagerActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         autoRefresh.removeCallbacks(refreshTick);
+        if (taskScroll != null) {
+            getSharedPreferences("task_manager_ui", MODE_PRIVATE).edit()
+                    .putInt("scroll_y", taskScroll.getScrollY())
+                    .putBoolean("multi_only", multiOnly)
+                    .apply();
+        }
         super.onPause();
     }
 
@@ -158,8 +166,9 @@ public final class TaskManagerActivity extends AppCompatActivity {
         root.addView(closeAll, cap);
         closeAll.setOnClickListener(v -> confirmCloseAll());
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
+        taskScroll = new ScrollView(this);
+        taskScroll.setFillViewport(true);
+        ScrollView scroll = taskScroll;
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, 0, 1);
         scrollParams.topMargin = dp(8);
         root.addView(scroll, scrollParams);
@@ -170,6 +179,14 @@ public final class TaskManagerActivity extends AppCompatActivity {
         scroll.addView(listHost, new ScrollView.LayoutParams(-1, -2));
 
         setContentView(root);
+        getSharedPreferences("task_manager_ui", MODE_PRIVATE)
+                .getBoolean("multi_only", false);
+        multiOnly = getSharedPreferences("task_manager_ui", MODE_PRIVATE)
+                .getBoolean("multi_only", false);
+        pendingScrollY = getSharedPreferences("task_manager_ui", MODE_PRIVATE)
+                .getInt("scroll_y", 0);
+        updateTabs();
+        taskScroll.post(() -> taskScroll.scrollTo(0, pendingScrollY));
     }
 
     private TextView addHeroMetric(LinearLayout row, String label) {
@@ -226,6 +243,7 @@ public final class TaskManagerActivity extends AppCompatActivity {
 
     private void render() {
         if (listHost == null) return;
+        int keepY = taskScroll == null ? 0 : taskScroll.getScrollY();
         listHost.removeAllViews();
 
         Map<String, List<TaskInspector.TaskInfo>> grouped = new LinkedHashMap<>();
@@ -258,6 +276,8 @@ public final class TaskManagerActivity extends AppCompatActivity {
         metricTasks.setText(String.valueOf(current.size()));
         metricMulti.setText(String.valueOf(multiCount));
         metricRam.setText(formatRamCompact(totalRam));
+
+        if (taskScroll != null) taskScroll.post(() -> taskScroll.scrollTo(0, keepY));
 
         if (appCount == 0) {
             LinearLayout empty = CatUi.card(this);
