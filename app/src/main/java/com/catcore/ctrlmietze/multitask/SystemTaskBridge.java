@@ -136,6 +136,7 @@ public final class SystemTaskBridge {
 
             int after = TaskInspector.countTasksForPackage(pkg);
             boolean ok = after >= desired || (after < 0 && current >= desired);
+            final String finalLast = last;
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (callback != null) {
                     callback.onResult(ok, before, after, desired,
@@ -143,7 +144,7 @@ public final class SystemTaskBridge {
                                     ? "Root Module created the requested Android task target ("
                                         + before + " → " + after + "). Target app permissions remain unchanged."
                                     : "Root Module fallback could not reach " + desired
-                                        + " tasks. " + last);
+                                        + " tasks. " + finalLast);
                 }
             });
         });
