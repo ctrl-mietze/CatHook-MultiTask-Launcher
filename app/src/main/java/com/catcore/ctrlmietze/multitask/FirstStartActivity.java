@@ -194,11 +194,19 @@ public final class FirstStartActivity extends AppCompatActivity {
                         + "and the V2 window backend. No system files are replaced.");
 
         boolean active = EnvironmentProbe.isSystemHookActive(this);
-        addStatus(active ? "System Framework hook active" : "System Framework hook not detected",
+        int loadedProtocol = EnvironmentProbe.systemHookProtocol(this);
+        boolean outdated = loadedProtocol >= 0
+                && loadedProtocol != EnvironmentProbe.CURRENT_HOOK_PROTOCOL;
+        addStatus(active ? "System Framework hook active"
+                        : outdated ? "System Framework hook update required"
+                        : "System Framework hook not detected",
                 active ? CatUi.GOOD : CatUi.WARN,
                 active ? "The MultiTask hook is active inside system_server for this userspace session."
+                        : outdated
+                        ? "The APK has newer LSPosed hook code than the copy currently loaded in system_server. Use Soft reboot once to load protocol "
+                                + EnvironmentProbe.CURRENT_HOOK_PROTOCOL + "."
                         : "If you just enabled Android/System Framework in LSPosed, the already-running system_server still has to reload. "
-                        + "Use Soft reboot below; this restarts Android userspace through KernelSU without rebooting the kernel.");
+                                + "Use Soft reboot below; this restarts Android userspace through KernelSU without rebooting the kernel.");
 
         if (!active) {
             Button openLsposed = CatUi.secondaryButton(this, "Open LSPosed");
