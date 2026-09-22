@@ -1,23 +1,28 @@
 package com.catcore.ctrlmietze.multitask.window;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.SurfaceTexture;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.text.InputType;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Surface;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.catcore.ctrlmietze.multitask.EnvironmentProbe;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
 
 import java.util.UUID;
@@ -36,6 +41,7 @@ final class VirtualWindowView extends FrameLayout {
     private final String activityName;
     private final String label;
     private final Listener listener;
+    private final Runnable stateChanged;
     private final String sessionId = UUID.randomUUID().toString();
 
     private final TextureView texture;
@@ -64,19 +70,21 @@ final class VirtualWindowView extends FrameLayout {
     private int normalHeight;
 
     VirtualWindowView(Activity host, String packageName, String activityName,
-                      String label, Listener listener) {
+                      String label, Listener listener, Runnable stateChanged) {
         super(host);
         this.host = host;
         this.packageName = packageName;
         this.activityName = activityName == null ? "" : activityName;
         this.label = label == null || label.trim().isEmpty() ? packageName : label;
         this.listener = listener;
+        this.stateChanged = stateChanged;
 
         setClipChildren(true);
         setClipToPadding(true);
         setBackground(frameBackground(Color.rgb(23, 28, 39), dp(18)));
         setElevation(dp(12));
         setClipToOutline(true);
+        setFocusable(true);
 
         LinearLayout shell = new LinearLayout(host);
         shell.setOrientation(LinearLayout.VERTICAL);
@@ -106,8 +114,22 @@ final class VirtualWindowView extends FrameLayout {
         stateText.setEllipsize(android.text.TextUtils.TruncateAt.END);
         titleBlock.addView(stateText, new LinearLayout.LayoutParams(-1, 0, 1));
 
+        TextView keyboard = control("⌨");
+        keyboard.setTextSize(14);
+        titleBar.addView(keyboard, new LinearLayout.LayoutParams(dp(38), dp(34)));
+        keyboard.setOnClickListener(v -> showKeyboardBridge());
+
+        TextView focus = control("◎");
+        focus.setTextSize(15);
+        LinearLayout.LayoutParams focusParams = new LinearLayout.LayoutParams(dp(38), dp(34));
+        focusParams.leftMargin = dp(4);
+        titleBar.addView(focus, focusParams);
+        focus.setOnClickListener(v -> focusWindow());
+
         TextView maximize = control("□");
-        titleBar.addView(maximize, new LinearLayout.LayoutParams(dp(38), dp(34)));
+        LinearLayout.LayoutParams maxParams = new LinearLayout.LayoutParams(dp(38), dp(34));
+        maxParams.leftMargin = dp(4);
+        titleBar.addView(maximize, maxParams);
         maximize.setOnClickListener(v -> toggleMaximize());
 
         TextView close = control("×");
@@ -124,16 +146,22 @@ final class VirtualWindowView extends FrameLayout {
 
         texture = new TextureView(host);
         texture.setOpaque(true);
+        texture.setFocusable(true);
+        texture.setFocusableInTouchMode(true);
         content.addView(texture, new FrameLayout.LayoutParams(-1, -1));
         texture.setSurfaceTextureListener(new TextureListener());
         texture.setOnTouchListener((v, event) -> {
-            bringToFront();
+            focusWindow();
             if (virtualDisplay == null) return true;
-            RootInputBridge.get().sendMotion(
-                    virtualDisplay.getDisplay().getDisplayId(),
-                    event,
-                    virtualWidth,
-                    virtualHeight);
+
+            int displayId = virtualDisplay.getDisplay().getDisplayId();
+            if (event.getPointerCount() > 1 && EnvironmentProbe.isSystemHookActive(host)) {
+                FrameworkInputBridge.sendMotion(
+                        host, displayId, event, virtualWidth, virtualHeight);
+            } else {
+                RootInputBridge.get().sendMotion(
+                        displayId, event, virtualWidth, virtualHeight);
+            }
             return true;
         });
 
@@ -145,7 +173,7 @@ final class VirtualWindowView extends FrameLayout {
         content.addView(resize, resizeParams);
         resize.setOnTouchListener(this::resizeWindow);
 
-        setOnClickListener(v -> bringToFront());
+        setOnClickListener(v -> focusWindow());
     }
 
     private void createVirtualDisplay(SurfaceTexture surfaceTexture, int width, int height) {
@@ -212,7 +240,7 @@ final class VirtualWindowView extends FrameLayout {
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                bringToFront();
+                focusWindow();
                 dragStartRawX = event.getRawX();
                 dragStartRawY = event.getRawY();
                 dragStartX = getX();
@@ -230,10 +258,33 @@ final class VirtualWindowView extends FrameLayout {
                 return true;
 
             case MotionEvent.ACTION_UP:
+                if (!maximized) snapAfterDrag(parent);
+                notifyStateChanged();
+                return true;
+
             case MotionEvent.ACTION_CANCEL:
+                notifyStateChanged();
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private void snapAfterDrag(View parent) {
+        int threshold = dp(22);
+        if (getY() <= threshold) {
+            maximizeNow();
+            return;
+        }
+
+        int gap = dp(5);
+        int half = Math.max(dp(MIN_WIDTH_DP), (parent.getWidth() - gap) / 2);
+        int height = Math.max(dp(MIN_HEIGHT_DP), parent.getHeight());
+
+        if (getX() <= threshold) {
+            applyBounds(0, 0, half, height, true);
+        } else if (getX() + getWidth() >= parent.getWidth() - threshold) {
+            applyBounds(parent.getWidth() - half, 0, half, height, true);
         }
     }
 
@@ -243,7 +294,7 @@ final class VirtualWindowView extends FrameLayout {
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                bringToFront();
+                focusWindow();
                 resizeStartRawX = event.getRawX();
                 resizeStartRawY = event.getRawY();
                 resizeStartWidth = getWidth();
@@ -264,6 +315,7 @@ final class VirtualWindowView extends FrameLayout {
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                notifyStateChanged();
                 return true;
             default:
                 return false;
@@ -271,29 +323,152 @@ final class VirtualWindowView extends FrameLayout {
     }
 
     private void toggleMaximize() {
-        View parent = (View) getParent();
-        if (parent == null) return;
-
-        ViewGroup.LayoutParams lp = getLayoutParams();
-        if (!maximized) {
-            normalX = getX();
-            normalY = getY();
-            normalWidth = getWidth();
-            normalHeight = getHeight();
-
-            lp.width = Math.max(dp(MIN_WIDTH_DP), parent.getWidth());
-            lp.height = Math.max(dp(MIN_HEIGHT_DP), parent.getHeight());
-            setLayoutParams(lp);
-            setX(0);
-            setY(0);
-            maximized = true;
-        } else {
+        if (maximized) {
+            ViewGroup.LayoutParams lp = getLayoutParams();
             lp.width = normalWidth > 0 ? normalWidth : dp(400);
             lp.height = normalHeight > 0 ? normalHeight : dp(600);
             setLayoutParams(lp);
             setX(normalX);
             setY(normalY);
             maximized = false;
+            notifyStateChanged();
+        } else {
+            maximizeNow();
+        }
+    }
+
+    private void maximizeNow() {
+        View parent = (View) getParent();
+        if (parent == null) return;
+
+        if (!maximized) {
+            normalX = getX();
+            normalY = getY();
+            normalWidth = getWidth();
+            normalHeight = getHeight();
+        }
+
+        ViewGroup.LayoutParams lp = getLayoutParams();
+        lp.width = Math.max(dp(MIN_WIDTH_DP), parent.getWidth());
+        lp.height = Math.max(dp(MIN_HEIGHT_DP), parent.getHeight());
+        setLayoutParams(lp);
+        setX(0);
+        setY(0);
+        maximized = true;
+        notifyStateChanged();
+    }
+
+    void applyBounds(int x, int y, int width, int height, boolean animate) {
+        maximized = false;
+        ViewGroup.LayoutParams lp = getLayoutParams();
+        lp.width = Math.max(dp(MIN_WIDTH_DP), width);
+        lp.height = Math.max(dp(MIN_HEIGHT_DP), height);
+        setLayoutParams(lp);
+
+        if (animate) {
+            animate().x(x).y(y).setDuration(180L).start();
+        } else {
+            setX(x);
+            setY(y);
+        }
+        notifyStateChanged();
+    }
+
+    void restoreState(WindowSessionStore.State state) {
+        if (state == null) return;
+        View parent = (View) getParent();
+        if (parent == null) return;
+
+        int width = state.width > 0 ? state.width : getWidth();
+        int height = state.height > 0 ? state.height : getHeight();
+
+        if (state.maximized) {
+            normalX = state.x;
+            normalY = state.y;
+            normalWidth = width;
+            normalHeight = height;
+            maximizeNow();
+        } else {
+            int maxX = Math.max(0, parent.getWidth() - width);
+            int maxY = Math.max(0, parent.getHeight() - height);
+            applyBounds(
+                    Math.round(clamp(state.x, 0, maxX)),
+                    Math.round(clamp(state.y, 0, maxY)),
+                    width,
+                    height,
+                    false);
+        }
+    }
+
+    WindowSessionStore.State snapshot() {
+        return new WindowSessionStore.State(
+                packageName,
+                activityName,
+                label,
+                getX(),
+                getY(),
+                getWidth(),
+                getHeight(),
+                maximized);
+    }
+
+    private void focusWindow() {
+        bringToFront();
+        requestFocus();
+        texture.requestFocus();
+        setElevation(dp(18));
+        animate().scaleX(1.003f).scaleY(1.003f).setDuration(70L)
+                .withEndAction(() -> animate().scaleX(1f).scaleY(1f).setDuration(90L).start())
+                .start();
+    }
+
+    private void showKeyboardBridge() {
+        if (virtualDisplay == null || virtualDisplay.getDisplay() == null) {
+            stateText.setText("Keyboard unavailable until display is live");
+            return;
+        }
+
+        int displayId = virtualDisplay.getDisplay().getDisplayId();
+        EditText input = new EditText(host);
+        input.setSingleLine(false);
+        input.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setHint("Type text for " + label);
+        input.setPadding(dp(18), dp(10), dp(18), dp(10));
+
+        AlertDialog dialog = new AlertDialog.Builder(host)
+                .setTitle("Send keyboard input")
+                .setMessage("Text is injected only into this virtual display.")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Enter", (d, w) -> sendKey(displayId, KeyEvent.KEYCODE_ENTER))
+                .setPositiveButton("Send", null)
+                .create();
+
+        dialog.setOnShowListener(x ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                    String text = input.getText().toString();
+                    if (text.isEmpty()) return;
+                    sendText(displayId, text);
+                    input.setText("");
+                }));
+        dialog.show();
+    }
+
+    private void sendText(int displayId, String value) {
+        if (EnvironmentProbe.isSystemHookActive(host)) {
+            FrameworkInputBridge.sendText(host, displayId, value);
+        } else {
+            RootInputBridge.get().sendText(displayId, value);
+        }
+    }
+
+    private void sendKey(int displayId, int keyCode) {
+        if (EnvironmentProbe.isSystemHookActive(host)) {
+            FrameworkInputBridge.sendKey(host, displayId, keyCode);
+        } else {
+            RootInputBridge.get().sendKey(displayId, keyCode);
         }
     }
 
@@ -358,6 +533,10 @@ final class VirtualWindowView extends FrameLayout {
     void close() {
         releaseVirtualDisplay();
         if (listener != null) listener.onClosed(this);
+    }
+
+    private void notifyStateChanged() {
+        if (stateChanged != null) stateChanged.run();
     }
 
     private void releaseVirtualDisplay() {
