@@ -75,7 +75,7 @@ jobs:
             | grep -Fx 'com.catcore.ctrlmietze.multitask.xposed.MultiTaskHook'
 
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
-          grep -Fq 'A3:5D:6A:D4:34:9C:E6:96:80:A9:7D:6C:B3:1C:30:CE:5C:41:BC:BA:A8:77:16:DC:74:FD:51:5F:1D:36:2D:B8' /tmp/apksigner.txt
+          grep -Fqi 'certificate SHA-256 digest: a35d6ad4349ce69680a97d6cb31c30ce5c41bcbaa87716dc74fd515f1d362db8' /tmp/apksigner.txt
 
       - uses: actions/upload-artifact@v4
         with:
