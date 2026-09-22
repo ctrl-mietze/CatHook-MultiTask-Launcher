@@ -84,9 +84,12 @@ public final class WindowHostActivity extends AppCompatActivity {
 
         setContentView(root);
 
+        boolean recreatedByAndroid = state != null;
         canvas.post(() -> {
             restoreSessions();
-            handleIntent(getIntent());
+            if (!recreatedByAndroid) {
+                handleIntent(getIntent());
+            }
         });
     }
 
