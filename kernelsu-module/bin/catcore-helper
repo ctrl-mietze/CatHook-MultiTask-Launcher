@@ -116,15 +116,21 @@ case "$cmd" in
 
     stats)
         valid_pkg "$pkg" || { echo "invalid package"; exit 2; }
+        echo "PAGESIZE=$(getconf PAGESIZE 2>/dev/null || echo 4096)"
         ps -A -w -o PID,UID,RSS,PCPU,NAME 2>/dev/null | {
             read -r header
             echo "$header"
-            grep -E "[[:space:]]$pkg(:[^[:space:]]*)?$"
+            awk -v p="$pkg" '$5 == p || index($5, p ":") == 1'
         }
         ;;
 
+    stats-all)
+        echo "PAGESIZE=$(getconf PAGESIZE 2>/dev/null || echo 4096)"
+        ps -A -w -o PID,UID,RSS,PCPU,NAME 2>/dev/null
+        ;;
+
     *)
-        echo "usage: catcore-helper {status|launch|boost|restore|restore-all|trim|stop|stats} [package]"
+        echo "usage: catcore-helper {status|launch|boost|restore|restore-all|trim|stop|stats|stats-all} [package]"
         exit 1
         ;;
 esac
