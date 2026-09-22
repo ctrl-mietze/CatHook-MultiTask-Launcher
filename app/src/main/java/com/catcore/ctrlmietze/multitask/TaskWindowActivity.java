@@ -13,6 +13,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.catcore.ctrlmietze.multitask.window.WindowFramework;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -64,10 +66,24 @@ public final class TaskWindowActivity extends AppCompatActivity {
             row.addView(CatUi.text(this,"Task "+t.taskId,16,CatUi.TEXT,true));
             row.addView(CatUi.text(this,"Display "+t.displayId+" · "+String.format(Locale.US,"%.1f%% CPU",t.cpuPercent)+" · "+format(t.rssBytes)+" RAM",12,CatUi.MUTED,false));
         }
+        Button manage=CatUi.primaryButton(this,"Manage Activity");LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(52));mp.topMargin=dp(14);host.addView(manage,mp);
+        manage.setOnClickListener(v->openManagedActivity());
+
         Button close=CatUi.secondaryButton(this,"Close duplicate tasks");LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(50));cp.topMargin=dp(12);host.addView(close,cp);
         close.setOnClickListener(v->closeExtras(tasks));
         Button stop=CatUi.secondaryButton(this,"Force stop app");LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,dp(50));sp.topMargin=dp(8);host.addView(stop,sp);
         stop.setOnClickListener(v->CatDialog.show(this,"TASK CONTROL","Force stop app?","Stops the package and all of its current tasks.","Cancel","Force stop",()->exec.execute(()->{RootShell.Result r=RootShell.run("am force-stop --user current "+RootShell.quote(pkg),6);runOnUiThread(()->{Toast.makeText(this,r.ok?"App stopped":RootShell.shortReason(r),Toast.LENGTH_LONG).show();refresh();});})));
+    }
+
+    private void openManagedActivity(){
+        try{
+            android.content.Intent launch=getPackageManager().getLaunchIntentForPackage(pkg);
+            String activity=launch!=null&&launch.getComponent()!=null?launch.getComponent().getClassName():"";
+            CharSequence l=getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg,0));
+            WindowFramework.open(this,pkg,activity,l==null?pkg:l.toString());
+        }catch(Throwable t){
+            Toast.makeText(this,"Could not resolve the app activity.",Toast.LENGTH_LONG).show();
+        }
     }
 
     private void closeExtras(List<TaskInspector.TaskInfo> tasks){
