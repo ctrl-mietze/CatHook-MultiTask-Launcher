@@ -42,7 +42,7 @@ public final class MainActivity extends AppCompatActivity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(22), dp(16), dp(18));
+        root.setPadding(dp(16), dp(30), dp(16), dp(18));
         root.setBackground(CatUi.background());
 
         LinearLayout hero = CatUi.card(this);
@@ -70,7 +70,7 @@ public final class MainActivity extends AppCompatActivity {
         sp.topMargin = dp(5);
         brand.addView(subtitle, sp);
 
-        TextView version = CatUi.pill(this, "V2 DEV5", Color.rgb(56, 65, 128));
+        TextView version = CatUi.pill(this, "V2 DEV6", Color.rgb(56, 65, 128));
         heroTop.addView(version, new LinearLayout.LayoutParams(dp(82), dp(34)));
 
         rootReady = EnvironmentProbe.hasRoot();
@@ -168,8 +168,7 @@ public final class MainActivity extends AppCompatActivity {
 
         TextView modePill = CatUi.pill(this, "CHANGE", Color.rgb(51, 61, 86));
         modeRow.addView(modePill, new LinearLayout.LayoutParams(dp(76), dp(34)));
-        modeCard.setOnClickListener(v ->
-                startActivity(new Intent(this, SettingsActivity.class)));
+        modeCard.setOnClickListener(v -> showModeSelector());
         CatUi.pressScale(modeCard);
 
         LinearLayout appStarter = CatUi.card(this);
@@ -311,6 +310,28 @@ public final class MainActivity extends AppCompatActivity {
         pill.setLayoutParams(p);
         pill.setTextSize(9);
         return pill;
+    }
+
+    private void showModeSelector() {
+        final String[] modes = {
+                "Start as my task",
+                "Start as app's own task"
+        };
+        int current = SettingsStore.startMode(this) == SettingsStore.MODE_APP_OWN_TASK ? 1 : 0;
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Main start method")
+                .setSingleChoiceItems(modes, current, (dialog, which) -> {
+                    SettingsStore.setStartMode(
+                            this,
+                            which == 1
+                                    ? SettingsStore.MODE_APP_OWN_TASK
+                                    : SettingsStore.MODE_MY_TASK);
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private boolean isFrameworkRunning() {
