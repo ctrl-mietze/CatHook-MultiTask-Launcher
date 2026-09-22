@@ -114,41 +114,7 @@ public final class TaskLauncher {
             cache.edit().remove(pkg).apply();
         }
 
-        progress(context, progress, "Resolving the best launcher entry…");
-
-        if (SettingsStore.rootHelperEnabled(context)
-                && SettingsStore.rootTaskStart(context)
-                && RootPluginManager.isInstalled()) {
-            progress(context, progress, "Trying CatCore Root Helper…");
-            int before = TaskInspector.countTasksForPackage(pkg);
-            RootPluginManager.Result helper = RootPluginManager.run("launch", pkg);
-            if (helper.ok) {
-                LaunchResult verified = verifyNewTask(pkg, before,
-                        "Started through CatCore Root Helper.");
-                if (verified.ok) return verified;
-                reasons.add("Root Helper: " + verified.message);
-            } else {
-                reasons.add("Root Helper: " + helper.message);
-            }
-        }
-
-        LaunchResult packageFull = runStrategy(
-                context, "root_package_full", pkg, "", childTasks);
-        if (packageFull.ok) {
-            remember(cache, pkg, "root_package_full", "");
-            return packageFull;
-        }
-        reasons.add("Package launch: " + packageFull.message);
-
-        for (String component : candidates) {
-            LaunchResult r = runStrategy(
-                    context, "root_component_full", pkg, component, childTasks);
-            if (r.ok) {
-                remember(cache, pkg, "root_component_full", component);
-                return r;
-            }
-            reasons.add(component + ": " + r.message);
-        }
+        progress(context, progress, "Trying the safe Android compatibility path…");
 
         for (String component : candidates) {
             LaunchResult r = runStrategy(
@@ -168,8 +134,26 @@ public final class TaskLauncher {
         }
         reasons.add("Android launch intent: " + directLaunch.message);
 
-        if (maxStability || compatibility) {
+        // Root ActivityManager strategies are intentionally NOT part of the
+        // normal V2 own-task path anymore. They are compatibility fallbacks
+        // only, after the LSPosed system_server bridge has already failed.
+        if (compatibility || maxStability) {
             progress(context, progress, "Trying compatibility fallbacks…");
+
+            if (SettingsStore.rootHelperEnabled(context)
+                    && SettingsStore.rootTaskStart(context)
+                    && RootPluginManager.isInstalled()) {
+                int before = TaskInspector.countTasksForPackage(pkg);
+                RootPluginManager.Result helper = RootPluginManager.run("launch", pkg);
+                if (helper.ok) {
+                    LaunchResult verified = verifyNewTask(
+                            pkg, before, "Started through CatCore Root Helper.");
+                    if (verified.ok) return verified;
+                    reasons.add("Root Helper: " + verified.message);
+                } else {
+                    reasons.add("Root Helper: " + helper.message);
+                }
+            }
 
             for (String component : candidates) {
                 LaunchResult r = runStrategy(
@@ -178,25 +162,17 @@ public final class TaskLauncher {
                     remember(cache, pkg, "root_component_basic", component);
                     return r;
                 }
-                reasons.add("Basic " + component + ": " + r.message);
+                reasons.add("Root compatibility " + component + ": " + r.message);
             }
-
-            LaunchResult packageBasic = runStrategy(
-                    context, "root_package_basic", pkg, "", childTasks);
-            if (packageBasic.ok) {
-                remember(cache, pkg, "root_package_basic", "");
-                return packageBasic;
-            }
-            reasons.add("Basic package launch: " + packageBasic.message);
 
             if (maxStability) {
-                LaunchResult monkey = runStrategy(context, "monkey", pkg, "", childTasks);
-                if (monkey.ok) {
-                    remember(cache, pkg, "monkey", "");
-                    return new LaunchResult(true,
-                            "App started with the final compatibility fallback.");
+                LaunchResult packageBasic = runStrategy(
+                        context, "root_package_basic", pkg, "", childTasks);
+                if (packageBasic.ok) {
+                    remember(cache, pkg, "root_package_basic", "");
+                    return packageBasic;
                 }
-                reasons.add("Final fallback: " + monkey.message);
+                reasons.add("Root package compatibility: " + packageBasic.message);
             }
         }
 
