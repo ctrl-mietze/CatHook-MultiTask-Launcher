@@ -283,7 +283,7 @@ public final class MainActivity extends AppCompatActivity {
     private Button button(String label) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextAllCaps(false);
+        b.setAllCaps(false);
         b.setTextColor(Color.WHITE);
         b.setTextSize(14);
         b.setGravity(Gravity.CENTER);
