@@ -7,7 +7,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ResultReceiver;
 
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class SystemTaskBridge {
@@ -15,6 +17,8 @@ public final class SystemTaskBridge {
             "com.catcore.ctrlmietze.multitask.action.SYSTEM_TASK";
     public static final int RESULT_OK = 1;
     public static final int RESULT_ERROR = -1;
+    private static final Set<String> ACTIVE_PACKAGES =
+            ConcurrentHashMap.newKeySet();
 
     public interface Callback {
         void onResult(boolean ok, int before, int after, int desired, String message);
@@ -30,6 +34,21 @@ public final class SystemTaskBridge {
             Callback callback) {
         Context app = context.getApplicationContext();
         int target = Math.max(1, Math.min(8, desired));
+
+        if (packageName == null || packageName.trim().isEmpty()) {
+            if (callback != null) {
+                callback.onResult(false, -1, -1, target, "No package name was supplied.");
+            }
+            return;
+        }
+
+        if (!ACTIVE_PACKAGES.add(packageName)) {
+            if (callback != null) {
+                callback.onResult(false, -1, -1, target,
+                        "A task request for this app is already running.");
+            }
+            return;
+        }
         Handler main = new Handler(Looper.getMainLooper());
         AtomicBoolean finished = new AtomicBoolean(false);
 
@@ -37,6 +56,7 @@ public final class SystemTaskBridge {
             @Override
             protected void onReceiveResult(int resultCode, Bundle resultData) {
                 if (!finished.compareAndSet(false, true)) return;
+                ACTIVE_PACKAGES.remove(packageName);
                 int before = resultData == null ? -1 : resultData.getInt("before", -1);
                 int after = resultData == null ? -1 : resultData.getInt("after", -1);
                 int wanted = resultData == null ? target : resultData.getInt("desired", target);
@@ -61,6 +81,7 @@ public final class SystemTaskBridge {
         try {
             app.sendBroadcast(request);
         } catch (Throwable t) {
+            ACTIVE_PACKAGES.remove(packageName);
             finished.set(true);
             if (callback != null) {
                 callback.onResult(false, -1, -1, target,
@@ -71,6 +92,7 @@ public final class SystemTaskBridge {
 
         main.postDelayed(() -> {
             if (!finished.compareAndSet(false, true)) return;
+            ACTIVE_PACKAGES.remove(packageName);
             if (callback != null) {
                 callback.onResult(false, -1, -1, target,
                         "The LSPosed system task bridge did not answer within 7 seconds.");
