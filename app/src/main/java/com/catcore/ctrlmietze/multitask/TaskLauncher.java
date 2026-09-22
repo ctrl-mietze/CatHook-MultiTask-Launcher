@@ -120,11 +120,16 @@ public final class TaskLauncher {
                 && SettingsStore.rootTaskStart(context)
                 && RootPluginManager.isInstalled()) {
             progress(context, progress, "Trying CatCore Root Helper…");
+            int before = TaskInspector.countTasksForPackage(pkg);
             RootPluginManager.Result helper = RootPluginManager.run("launch", pkg);
             if (helper.ok) {
-                return new LaunchResult(true, "Started through CatCore Root Helper.");
+                LaunchResult verified = verifyNewTask(pkg, before,
+                        "Started through CatCore Root Helper.");
+                if (verified.ok) return verified;
+                reasons.add("Root Helper: " + verified.message);
+            } else {
+                reasons.add("Root Helper: " + helper.message);
             }
-            reasons.add("Root Helper: " + helper.message);
         }
 
         LaunchResult packageFull = runStrategy(
@@ -259,6 +264,14 @@ public final class TaskLauncher {
 
     private static LaunchResult runStrategy(Context context, String strategy, String pkg,
                                             String component, boolean childTasks) {
+        int before = TaskInspector.countTasksForPackage(pkg);
+        LaunchResult raw = runStrategyRaw(context, strategy, pkg, component, childTasks);
+        if (!raw.ok) return raw;
+        return verifyNewTask(pkg, before, raw.message);
+    }
+
+    private static LaunchResult runStrategyRaw(Context context, String strategy, String pkg,
+                                               String component, boolean childTasks) {
         if (!SettingsStore.methodEnabled(context, strategy)) {
             return new LaunchResult(false, "Disabled in Developer Options: " + strategy);
         }
@@ -333,6 +346,43 @@ public final class TaskLauncher {
         }
 
         return new LaunchResult(false, "Unknown start strategy.");
+    }
+
+    private static LaunchResult verifyNewTask(
+            String pkg, int before, String successMessage) {
+        // If task inspection is unavailable on an OEM build, keep the raw launch result
+        // rather than making every launch impossible. Successful inspections are strict.
+        if (before < 0) {
+            return new LaunchResult(true,
+                    successMessage + " Task verification unavailable on this Android build.");
+        }
+
+        int after = before;
+        final long[] waits = {70L, 120L, 180L, 260L};
+        for (long wait : waits) {
+            try {
+                Thread.sleep(wait);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+
+            int observed = TaskInspector.countTasksForPackage(pkg);
+            if (observed < 0) {
+                return new LaunchResult(true,
+                        successMessage + " Task verification became unavailable.");
+            }
+            after = observed;
+            if (after > before) {
+                return new LaunchResult(true,
+                        "Started and verified as a separate task (" + before + " → " + after + ").");
+            }
+        }
+
+        return new LaunchResult(false,
+                "Android reported a successful start, but the task count did not increase "
+                        + "(" + before + " → " + after + "). "
+                        + "The existing task was probably reused.");
     }
 
     private static LaunchResult rootStart(String command) {
