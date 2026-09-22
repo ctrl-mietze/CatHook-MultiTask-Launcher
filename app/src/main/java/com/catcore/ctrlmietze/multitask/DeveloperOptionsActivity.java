@@ -83,6 +83,7 @@ public final class DeveloperOptionsActivity extends AppCompatActivity {
         wtp.topMargin = dp(6);
         warning.addView(wt, wtp);
 
+        addLegacyEasyMode();
         for (String[] method : METHODS) addMethod(method[0], method[1], method[2]);
 
         TextView diagnosticsHeading = CatUi.section(this, "DIAGNOSTICS");
@@ -118,6 +119,33 @@ public final class DeveloperOptionsActivity extends AppCompatActivity {
         });
 
         setContentView(scroll);
+    }
+
+    private void addLegacyEasyMode() {
+        LinearLayout card = CatUi.card(this);
+        card.setBackground(CatUi.stroke(this, Color.rgb(25, 31, 52), 22, Color.rgb(65, 79, 133)));
+        root.addView(card, CatUi.cardParams(this));
+
+        SwitchCompat toggle = new SwitchCompat(this);
+        toggle.setText("Legacy / Easy Mode");
+        toggle.setTextColor(CatUi.TEXT);
+        toggle.setTextSize(15);
+        toggle.setChecked(SettingsStore.legacyEasyMode(this));
+        card.addView(toggle);
+
+        TextView hint = CatUi.text(this,
+                "Simplified compatibility UI using the current stable backend. Apps return to Home, Start as app's own task is enforced, and advanced V2 controls stay hidden until you leave Easy Mode.",
+                12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.topMargin = dp(6);
+        card.addView(hint, hp);
+
+        toggle.setOnCheckedChangeListener((b, checked) -> {
+            SettingsStore.setLegacyEasyMode(this, checked);
+            Toast.makeText(this,
+                    checked ? "Legacy / Easy Mode enabled" : "Full V2 interface restored",
+                    Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void addMethod(String key, String title, String subtitle) {
