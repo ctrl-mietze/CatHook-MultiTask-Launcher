@@ -83,10 +83,11 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         TextView count = CatUi.pill(activity, "×1", Color.rgb(45, 52, 72));
         controls.addView(count, new LinearLayout.LayoutParams(dp(46), dp(38)));
 
-        TextView play = CatUi.pill(activity, "▶", Color.rgb(69, 91, 198));
-        play.setTextSize(16);
+        TextView play = CatUi.pill(activity, "START", Color.rgb(69, 91, 198));
+        play.setTextSize(10);
+        play.setLetterSpacing(0.06f);
         play.setContentDescription("Start app");
-        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(46), dp(46));
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(68), dp(44));
         pp.leftMargin = dp(7);
         controls.addView(play, pp);
 
