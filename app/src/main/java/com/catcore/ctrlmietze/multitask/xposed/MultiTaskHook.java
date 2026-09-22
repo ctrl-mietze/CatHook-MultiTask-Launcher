@@ -161,6 +161,10 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                                     service, receiverContext, handler, intent);
                         } catch (Throwable t) {
                             XposedBridge.log("MultiTask V2 native task bridge: " + t);
+                            String failedPackage = intent.getStringExtra("package");
+                            if (failedPackage != null) {
+                                activeSystemTaskPackages.remove(failedPackage);
+                            }
                             sendTaskBridgeResult(
                                     resultReceiver(intent),
                                     SystemTaskBridge.RESULT_ERROR,
