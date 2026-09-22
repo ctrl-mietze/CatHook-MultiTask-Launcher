@@ -3,12 +3,16 @@
     package="com.catcore.ctrlmietze.multitask">
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <package android:name="org.lsposed.manager" />
     </queries>
 
     <application
@@ -25,6 +29,29 @@
         <meta-data
             android:name="xposedscope"
             android:value="com.catcore.ctrlmietze.multitask;android" />
+
+        <service
+            android:name=".CatCoreFrameworkService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:process=":framework">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="CatCore MultiTask live window and task framework" />
+        </service>
+
+        <activity
+            android:name=".FirstStartActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".RootManagerActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".DeveloperOptionsActivity"
+            android:exported="false" />
 
         <activity
             android:name=".LaunchProxyActivity"
@@ -64,7 +91,6 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
     </application>
