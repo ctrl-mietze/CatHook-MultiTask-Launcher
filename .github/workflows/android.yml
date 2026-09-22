@@ -36,13 +36,19 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
           test -f "$APK"
-          test "$(apkanalyzer manifest application-id "$APK")" = "com.catcore.ctrlmietze.multitask"
-          test "$(apkanalyzer manifest version-code "$APK")" = "20000"
-          test "$(apkanalyzer manifest version-name "$APK")" = "2.0.0.0-dev1"
-          test "$(apkanalyzer manifest min-sdk "$APK")" = "28"
-          test "$(apkanalyzer manifest target-sdk "$APK")" = "36"
 
-          unzip -p "$APK" assets/xposed_init             | grep -Fx 'com.catcore.ctrlmietze.multitask.xposed.MultiTaskHook'
+          APKANALYZER="$(find "$ANDROID_HOME" -type f -name apkanalyzer 2>/dev/null | head -n 1)"
+          test -n "$APKANALYZER"
+          chmod +x "$APKANALYZER"
+
+          test "$("$APKANALYZER" manifest application-id "$APK")" = "com.catcore.ctrlmietze.multitask"
+          test "$("$APKANALYZER" manifest version-code "$APK")" = "20000"
+          test "$("$APKANALYZER" manifest version-name "$APK")" = "2.0.0.0-dev1"
+          test "$("$APKANALYZER" manifest min-sdk "$APK")" = "28"
+          test "$("$APKANALYZER" manifest target-sdk "$APK")" = "36"
+
+          unzip -p "$APK" assets/xposed_init \
+            | grep -Fx 'com.catcore.ctrlmietze.multitask.xposed.MultiTaskHook'
 
           unzip -l "$APK" | grep -q 'classes.dex'
           unzip -l "$APK" | grep -q 'AndroidManifest.xml'
