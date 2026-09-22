@@ -116,6 +116,17 @@ public final class TaskLauncher {
 
         progress(context, progress, "Resolving the best launcher entry…");
 
+        if (SettingsStore.rootHelperEnabled(context)
+                && SettingsStore.rootTaskStart(context)
+                && RootPluginManager.isInstalled()) {
+            progress(context, progress, "Trying CatCore Root Helper…");
+            RootPluginManager.Result helper = RootPluginManager.run("launch", pkg);
+            if (helper.ok) {
+                return new LaunchResult(true, "Started through CatCore Root Helper.");
+            }
+            reasons.add("Root Helper: " + helper.message);
+        }
+
         LaunchResult packageFull = runStrategy(
                 context, "root_package_full", pkg, "", childTasks);
         if (packageFull.ok) {
