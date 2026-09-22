@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <permission
+        android:name="com.catcore.ctrlmietze.multitask.permission.FRAMEWORK_BRIDGE"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.catcore.ctrlmietze.multitask.permission.FRAMEWORK_BRIDGE" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
