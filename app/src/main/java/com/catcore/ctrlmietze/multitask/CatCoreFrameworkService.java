@@ -23,6 +23,7 @@ public final class CatCoreFrameworkService extends Service {
             "com.catcore.ctrlmietze.multitask.action.COMPAT_SCAN";
 
     private FrameworkHealthMonitor healthMonitor;
+    private FrameworkWindowGuard windowGuard;
     private BroadcastReceiver packageReceiver;
 
     @Override
@@ -44,6 +45,8 @@ public final class CatCoreFrameworkService extends Service {
 
         healthMonitor = new FrameworkHealthMonitor(this, this::publishFrameworkStatus);
         healthMonitor.start();
+        windowGuard = new FrameworkWindowGuard(this, this::publishFrameworkStatus);
+        windowGuard.start();
     }
 
     @Override
@@ -84,6 +87,10 @@ public final class CatCoreFrameworkService extends Service {
         if (healthMonitor != null) {
             healthMonitor.stop();
             healthMonitor = null;
+        }
+        if (windowGuard != null) {
+            windowGuard.stop();
+            windowGuard = null;
         }
 
         if (packageReceiver != null) {
