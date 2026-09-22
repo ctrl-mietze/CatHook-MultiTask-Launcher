@@ -12,6 +12,8 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.catcore.ctrlmietze.multitask.window.WindowGuardBridge;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -67,7 +69,10 @@ public final class FrameworkViewerActivity extends AppCompatActivity {
         addMetric("SESSION REGISTRY",String.valueOf(registered),"Recent packages tracked by Stability Guard.");
         addMetric("TASK RAM",String.format(Locale.US,"%.1f GB",ram/1073741824d),"Resident memory reported by the live task snapshot.");
         addMetric("APP CATALOG",String.valueOf(AppCatalog.loadCached(this).size()),"Cached launcher entries; refreshed by the framework.");
-        addMetric("STABILITY GUARD",SettingsStore.frameworkEnabled(this)?"ACTIVE":"OFF","Grace-period recovery remains conservative and preserves primary tasks.");
+        addMetric("STABILITY GUARD",SettingsStore.frameworkEnabled(this)?"ACTIVE":"OFF","System-pressure recovery · conservative cleanup · primary tasks preserved.");
+        int protectedWindows=WindowGuardBridge.protectedWindows(this);
+        addMetric("STABILITY GUARD+",WindowGuardBridge.guardActive(this)?"ACTIVE":"IDLE",
+                protectedWindows+" protected window session"+(protectedWindows==1?"":"s")+" · workspace heartbeat and recovery.");
     }
 
     private void addMetric(String label,String value,String detail){
