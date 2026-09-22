@@ -125,7 +125,7 @@ public final class SettingsActivity extends AppCompatActivity {
                 cached,
                 phantom);
 
-        RuntimeTuning.applyAsync(this, (ok, message) -> {
+        RuntimeTuning.applyAsync(this, true, (ok, message) -> {
             new AlertDialog.Builder(this)
                     .setTitle(ok ? "Settings applied" : "Settings saved")
                     .setMessage(message + (ok ? "" :
