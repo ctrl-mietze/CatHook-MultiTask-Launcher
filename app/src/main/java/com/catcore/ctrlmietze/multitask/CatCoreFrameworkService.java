@@ -19,6 +19,8 @@ public final class CatCoreFrameworkService extends Service {
     public static final int NOTIFICATION_ID = 2042;
     private static final String ACTION_REFRESH_CATALOG =
             "com.catcore.ctrlmietze.multitask.action.REFRESH_CATALOG";
+    private static final String ACTION_COMPAT_SCAN =
+            "com.catcore.ctrlmietze.multitask.action.COMPAT_SCAN";
 
     private FrameworkHealthMonitor healthMonitor;
     private BroadcastReceiver packageReceiver;
@@ -54,6 +56,18 @@ public final class CatCoreFrameworkService extends Service {
         if (intent != null && ACTION_REFRESH_CATALOG.equals(intent.getAction())) {
             AppCatalog.refreshAsync(this, true, null);
             detail = "Framework active · updating app catalog";
+        }
+
+        if (intent != null && ACTION_COMPAT_SCAN.equals(intent.getAction())
+                && SettingsStore.fullScanMode(this)) {
+            detail = "Framework active · compatibility scan running";
+            publishFrameworkStatus(detail);
+            new Thread(() -> {
+                int count = CompatibilityFullScanner.scan(this);
+                publishFrameworkStatus(
+                        "Framework active · " + count + " compatibility profiles ready");
+            }, "CatCore-compat-scan").start();
+            return START_STICKY;
         }
 
         publishFrameworkStatus(detail);
@@ -166,6 +180,13 @@ public final class CatCoreFrameworkService extends Service {
     public static void requestCatalogRefresh(Context context) {
         Intent intent = new Intent(context, CatCoreFrameworkService.class)
                 .setAction(ACTION_REFRESH_CATALOG);
+        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
+        else context.startService(intent);
+    }
+
+    public static void requestCompatibilityScan(Context context) {
+        Intent intent = new Intent(context, CatCoreFrameworkService.class)
+                .setAction(ACTION_COMPAT_SCAN);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
         else context.startService(intent);
     }
