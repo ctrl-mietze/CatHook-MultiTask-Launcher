@@ -33,7 +33,8 @@ public final class EnvironmentProbe {
             return currentBoot >= 0
                     && currentBoot == hookBoot
                     && hookUptime >= 0L
-                    && hookUptime <= now;
+                    && hookUptime <= now
+                    && now - hookUptime <= 5 * 60_000L;
         } catch (Throwable ignored) {
             return false;
         }
