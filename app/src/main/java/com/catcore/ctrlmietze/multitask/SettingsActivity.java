@@ -89,7 +89,7 @@ public final class SettingsActivity extends AppCompatActivity {
         framework.addView(frameworkToggle);
 
         TextView frameworkHint = CatUi.text(this,
-                "Runs the dedicated :framework process used by live windows, task sessions and framework notifications.",
+                "Runs the dedicated :framework process used by live windows, task sessions and framework notifications. Recommended.",
                 12, CatUi.MUTED, false);
         LinearLayout.LayoutParams fhp = new LinearLayout.LayoutParams(-1, -2);
         fhp.topMargin = dp(6);
