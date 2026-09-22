@@ -89,17 +89,21 @@ public final class MainActivity extends AppCompatActivity {
         srp.topMargin = dp(16);
         hero.addView(statusRow, srp);
 
-        statusRow.addView(statusPill(
-                EnvironmentProbe.hasRoot() ? "ROOT" : "NO ROOT",
-                EnvironmentProbe.hasRoot() ? CatUi.GOOD : CatUi.BAD));
+        boolean rootReady = EnvironmentProbe.hasRoot();
+        boolean xposedReady = isXposedActive();
+        boolean systemHookReady = EnvironmentProbe.isSystemHookActive(this);
 
         statusRow.addView(statusPill(
-                isXposedActive() ? "LSPOSED" : "NO LSPOSED",
-                isXposedActive() ? CatUi.GOOD : CatUi.BAD));
+                rootReady ? "ROOT" : "NO ROOT",
+                rootReady ? CatUi.GOOD : CatUi.BAD));
 
         statusRow.addView(statusPill(
-                EnvironmentProbe.isSystemHookActive(this) ? "SYSTEM HOOK" : "HOOK OFF",
-                EnvironmentProbe.isSystemHookActive(this) ? CatUi.GOOD : CatUi.WARN));
+                xposedReady ? "LSPOSED" : "NO LSPOSED",
+                xposedReady ? CatUi.GOOD : CatUi.BAD));
+
+        statusRow.addView(statusPill(
+                systemHookReady ? "SYSTEM HOOK" : "HOOK OFF",
+                systemHookReady ? CatUi.GOOD : CatUi.WARN));
 
         frameworkStatus = statusPill(
                 isFrameworkRunning() ? "FRAMEWORK" : "FRAMEWORK OFF",
