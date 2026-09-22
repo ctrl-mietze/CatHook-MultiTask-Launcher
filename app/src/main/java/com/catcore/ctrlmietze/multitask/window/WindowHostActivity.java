@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.catcore.ctrlmietze.multitask.CatCoreFrameworkService;
 import com.catcore.ctrlmietze.multitask.CatUi;
 import com.catcore.ctrlmietze.multitask.RootPluginManager;
 import com.catcore.ctrlmietze.multitask.SettingsStore;
@@ -24,7 +25,10 @@ public final class WindowHostActivity extends AppCompatActivity {
     private FrameLayout canvas;
     private TextView status;
     private TextView windowCount;
+    private TextView layoutButton;
     private int cascade;
+    private int layoutMode;
+    private boolean restoring;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -45,7 +49,7 @@ public final class WindowHostActivity extends AppCompatActivity {
         TextView back = CatUi.pill(this, "‹", Color.rgb(47, 55, 76));
         back.setTextSize(23);
         bar.addView(back, new LinearLayout.LayoutParams(dp(44), dp(44)));
-        back.setOnClickListener(v -> finish());
+        back.setOnClickListener(v -> closeWorkspaceAndFinish());
 
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
@@ -60,8 +64,15 @@ public final class WindowHostActivity extends AppCompatActivity {
         status.setSingleLine(true);
         titles.addView(status);
 
+        layoutButton = CatUi.pill(this, "▦", Color.rgb(47, 55, 76));
+        layoutButton.setTextSize(15);
+        bar.addView(layoutButton, new LinearLayout.LayoutParams(dp(42), dp(34)));
+        layoutButton.setOnClickListener(v -> cycleLayout());
+
         windowCount = CatUi.pill(this, "0 / " + MAX_WINDOWS, Color.rgb(55, 67, 127));
-        bar.addView(windowCount, new LinearLayout.LayoutParams(dp(66), dp(34)));
+        LinearLayout.LayoutParams countParams = new LinearLayout.LayoutParams(dp(66), dp(34));
+        countParams.leftMargin = dp(6);
+        bar.addView(windowCount, countParams);
 
         canvas = new FrameLayout(this);
         canvas.setClipChildren(true);
@@ -72,7 +83,11 @@ public final class WindowHostActivity extends AppCompatActivity {
         root.addView(canvas, cp);
 
         setContentView(root);
-        handleIntent(getIntent());
+
+        canvas.post(() -> {
+            restoreSessions();
+            handleIntent(getIntent());
+        });
     }
 
     @Override
@@ -80,6 +95,11 @@ public final class WindowHostActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleIntent(intent);
+    }
+
+    @Override
+    public void onBackPressed() {
+        closeWorkspaceAndFinish();
     }
 
     private void handleIntent(Intent intent) {
@@ -91,19 +111,24 @@ public final class WindowHostActivity extends AppCompatActivity {
         String label = intent.getStringExtra(WindowFramework.EXTRA_LABEL);
         intent.removeExtra(WindowFramework.EXTRA_PACKAGE);
 
-        addWindow(pkg, activity, label);
+        addWindow(pkg, activity, label, null);
     }
 
-    private void addWindow(String pkg, String activity, String label) {
+    private void addWindow(String pkg, String activity, String label,
+                           WindowSessionStore.State restoreState) {
         if (windows.size() >= MAX_WINDOWS) {
             status.setText("Maximum of " + MAX_WINDOWS + " live windows reached");
             return;
         }
 
-        int screenW = getResources().getDisplayMetrics().widthPixels;
-        int screenH = getResources().getDisplayMetrics().heightPixels;
-        int width = Math.max(dp(300), Math.min(screenW - dp(28), dp(430)));
-        int height = Math.max(dp(360), Math.min(screenH - dp(150), dp(650)));
+        int screenW = Math.max(dp(320), canvas.getWidth());
+        int screenH = Math.max(dp(430), canvas.getHeight());
+        int width = restoreState != null && restoreState.width > 0
+                ? restoreState.width
+                : Math.max(dp(300), Math.min(screenW - dp(28), dp(430)));
+        int height = restoreState != null && restoreState.height > 0
+                ? restoreState.height
+                : Math.max(dp(360), Math.min(screenH - dp(20), dp(650)));
 
         VirtualWindowView window = new VirtualWindowView(
                 this, pkg, activity, label,
@@ -128,8 +153,10 @@ public final class WindowHostActivity extends AppCompatActivity {
                             RootPluginManager.runAsync("trim", closedPackage, null);
                         }
                     }
+                    persistSessions();
                     updateStatus();
-                });
+                },
+                this::persistSessions);
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height);
         canvas.addView(window, lp);
@@ -142,11 +169,143 @@ public final class WindowHostActivity extends AppCompatActivity {
                     RootPluginManager.runAsync("boost", pkg, null), 700L);
         }
 
-        int offset = dp(20) * (cascade++ % 6);
-        window.setX(dp(4) + offset);
-        window.setY(dp(4) + offset);
+        if (restoreState != null) {
+            canvas.post(() -> window.restoreState(restoreState));
+        } else {
+            int offset = dp(20) * (cascade++ % 6);
+            window.setX(dp(4) + offset);
+            window.setY(dp(4) + offset);
+        }
+
+        window.setAlpha(0f);
+        window.setScaleX(0.97f);
+        window.setScaleY(0.97f);
+        window.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(180L)
+                .start();
+
         window.bringToFront();
+        persistSessions();
         updateStatus();
+    }
+
+    private void restoreSessions() {
+        if (!SettingsStore.restoreWindows(this)) {
+            WindowSessionStore.clear(this);
+            return;
+        }
+
+        List<WindowSessionStore.State> saved = WindowSessionStore.load(this);
+        if (saved.isEmpty()) return;
+
+        restoring = true;
+        WindowSessionStore.clear(this);
+        for (WindowSessionStore.State state : saved) {
+            if (windows.size() >= MAX_WINDOWS) break;
+            addWindow(state.packageName, state.activityName, state.label, state);
+        }
+        restoring = false;
+        persistSessions();
+
+        if (!windows.isEmpty()) {
+            status.setText("Recovered " + windows.size() + " workspace session"
+                    + (windows.size() == 1 ? "" : "s"));
+        }
+    }
+
+    private void persistSessions() {
+        if (restoring || !SettingsStore.restoreWindows(this)) return;
+        List<WindowSessionStore.State> states = new ArrayList<>();
+        for (VirtualWindowView window : windows) {
+            if (window.getWidth() <= 0 || window.getHeight() <= 0) continue;
+            states.add(window.snapshot());
+        }
+        WindowSessionStore.save(this, states);
+    }
+
+    private void cycleLayout() {
+        if (windows.isEmpty()) return;
+        layoutMode = (layoutMode + 1) % 3;
+        if (layoutMode == 0) {
+            arrangeCascade();
+            status.setText("Layout · Cascade");
+        } else if (layoutMode == 1) {
+            arrangeGrid();
+            status.setText("Layout · Grid");
+        } else {
+            arrangeColumns();
+            status.setText("Layout · Columns");
+        }
+        persistSessions();
+    }
+
+    private void arrangeCascade() {
+        int screenW = canvas.getWidth();
+        int screenH = canvas.getHeight();
+        int width = Math.max(dp(300), Math.min(screenW - dp(40), dp(430)));
+        int height = Math.max(dp(340), Math.min(screenH - dp(40), dp(620)));
+
+        for (int i = 0; i < windows.size(); i++) {
+            int offset = dp(20) * (i % 6);
+            windows.get(i).applyBounds(
+                    dp(4) + offset,
+                    dp(4) + offset,
+                    width,
+                    height,
+                    true);
+        }
+    }
+
+    private void arrangeGrid() {
+        int count = windows.size();
+        int cols = (int) Math.ceil(Math.sqrt(count));
+        int rows = (int) Math.ceil(count / (double) cols);
+        int gap = dp(8);
+        int width = Math.max(dp(270),
+                (canvas.getWidth() - gap * (cols - 1)) / Math.max(1, cols));
+        int height = Math.max(dp(330),
+                (canvas.getHeight() - gap * (rows - 1)) / Math.max(1, rows));
+
+        for (int i = 0; i < count; i++) {
+            int col = i % cols;
+            int row = i / cols;
+            windows.get(i).applyBounds(
+                    col * (width + gap),
+                    row * (height + gap),
+                    width,
+                    height,
+                    true);
+        }
+    }
+
+    private void arrangeColumns() {
+        int count = windows.size();
+        int gap = dp(6);
+        int width = Math.max(dp(270),
+                (canvas.getWidth() - gap * (count - 1)) / Math.max(1, count));
+        int height = Math.max(dp(330), canvas.getHeight());
+
+        for (int i = 0; i < count; i++) {
+            windows.get(i).applyBounds(
+                    i * (width + gap),
+                    0,
+                    width,
+                    height,
+                    true);
+        }
+    }
+
+    private void closeWorkspaceAndFinish() {
+        List<VirtualWindowView> copy = new ArrayList<>(windows);
+        for (VirtualWindowView window : copy) {
+            window.close();
+        }
+        WindowSessionStore.clear(this);
+        CatCoreFrameworkService.updateStatus(this, "Framework active · no live windows");
+        finish();
     }
 
     private void updateStatus() {
@@ -156,6 +315,12 @@ public final class WindowHostActivity extends AppCompatActivity {
                 ? WindowFramework.capabilitySummary(this)
                 : count + " live window" + (count == 1 ? "" : "s")
                         + " · " + WindowFramework.capabilitySummary(this));
+
+        CatCoreFrameworkService.updateStatus(
+                this,
+                count == 0
+                        ? "Framework active · no live windows"
+                        : count + " live MultiTask window" + (count == 1 ? "" : "s"));
     }
 
     private int dp(int value) {
