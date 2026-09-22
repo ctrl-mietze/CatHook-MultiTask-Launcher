@@ -55,10 +55,12 @@ case "$cmd" in
         component="$(cmd package resolve-activity --brief --user current             -a android.intent.action.MAIN             -c android.intent.category.LAUNCHER             -p "$pkg" 2>/dev/null | tail -n 1)"
         case "$component" in
             */*)
-                am start --user current                     --activity-new-task                     --activity-multiple-task                     --activity-new-document                     --activity-retain-in-recents                     -n "$component"
+                am start --user current                     --activity-new-task                     --activity-multiple-task                     --activity-new-document                     --activity-retain-in-recents                     -n "$component" \
+                    --ez com.catcore.ctrlmietze.multitask.FORCE_MULTITASK true
                 ;;
             *)
-                am start --user current                     --activity-new-task                     --activity-multiple-task                     -a android.intent.action.MAIN                     -c android.intent.category.LAUNCHER                     -p "$pkg"
+                am start --user current                     --activity-new-task                     --activity-multiple-task                     -a android.intent.action.MAIN                     -c android.intent.category.LAUNCHER                     -p "$pkg" \
+                    --ez com.catcore.ctrlmietze.multitask.FORCE_MULTITASK true
                 ;;
         esac
         ;;
