@@ -1,11 +1,14 @@
 package com.catcore.ctrlmietze.multitask;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
@@ -18,229 +21,328 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 
 public final class SettingsActivity extends AppCompatActivity {
-    private SwitchCompat compatibility;
-    private SwitchCompat maxStability;
-    private SwitchCompat childTasks;
-    private SwitchCompat restoreRuntime;
-    private EditText maxCached;
-    private EditText maxPhantom;
+    private LinearLayout root;
+    private final Handler debounce = new Handler(Looper.getMainLooper());
+    private Runnable runtimeApply;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        CatUi.applyWindow(this);
+        build();
+    }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (root != null) build();
+    }
+
+    private void build() {
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.rgb(10, 12, 17));
+        scroll.setBackground(CatUi.background());
 
-        LinearLayout root = new LinearLayout(this);
+        root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(30));
-        scroll.addView(root, new ScrollView.LayoutParams(-1, -2));
+        root.setPadding(dp(18), dp(18), dp(18), dp(38));
+        scroll.addView(root);
 
-        TextView title = text("Settings", 28, Color.WHITE, true);
-        root.addView(title);
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(header);
 
-        TextView subtitle = text("Tune how MultiTask resolves, starts and restores apps.", 13,
-                Color.rgb(157, 169, 191), false);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
-        subtitleParams.topMargin = dp(4);
-        subtitleParams.bottomMargin = dp(18);
-        root.addView(subtitle, subtitleParams);
+        Button back = CatUi.secondaryButton(this, "‹");
+        header.addView(back, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        back.setOnClickListener(v -> finish());
 
-        compatibility = addSwitch(root, "Compatibility mode",
-                "Only enable this when an app does not start reliably. MultiTask briefly checks its launcher entries and tries additional fallbacks.",
-                SettingsStore.compatibilityMode(this));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1);
+        tp.leftMargin = dp(12);
+        header.addView(titles, tp);
 
-        maxStability = addSwitch(root, "Max Stability",
-                "Uses the full fallback chain. For stubborn apps you can additionally add that app to the LSPosed scope.",
-                SettingsStore.maxStability(this));
+        titles.addView(CatUi.text(this, "Settings", 28, CatUi.TEXT, true));
+        titles.addView(CatUi.text(this, "Changes apply instantly", 12, CatUi.MUTED, false));
 
-        childTasks = addSwitch(root, "Open apps as child tasks",
-                "Experimental best-effort task mode. Android may still reuse a task depending on the target app's manifest.",
-                SettingsStore.childTasks(this));
+        addSection("MAIN START METHOD");
+        addModeCard(
+                "Start as my task",
+                "Stable framework mode",
+                "Hosts launches through the CatCore MultiTask framework and V2 window/task layer.",
+                SettingsStore.MODE_MY_TASK);
+        addModeCard(
+                "Start as app's own task",
+                "Native app task",
+                "Keeps the app in its own Android task and uses the root + LSPosed fallback chain.",
+                SettingsStore.MODE_APP_OWN_TASK);
 
-        restoreRuntime = addSwitch(root, "Restore runtime values",
-                "Re-applies the values below when MultiTask starts and after boot. No system files are replaced.",
-                SettingsStore.restoreRuntime(this));
+        addSection("CATCORE FRAMEWORK");
+        LinearLayout framework = CatUi.card(this);
+        root.addView(framework, CatUi.cardParams(this));
 
-        addSection(root, "Runtime limits");
+        SwitchCompat frameworkToggle = new SwitchCompat(this);
+        frameworkToggle.setText("Keep MultiTask Framework active");
+        frameworkToggle.setTextColor(CatUi.TEXT);
+        frameworkToggle.setTextSize(16);
+        frameworkToggle.setChecked(SettingsStore.frameworkEnabled(this));
+        framework.addView(frameworkToggle);
 
-        maxCached = addNumber(root, "Max cached processes",
-                "0 = Android default · allowed range 0–512",
-                SettingsStore.maxCachedProcesses(this));
+        TextView frameworkHint = CatUi.text(this,
+                "Runs the dedicated :framework process used by live windows, task sessions and framework notifications.",
+                12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams fhp = new LinearLayout.LayoutParams(-1, -2);
+        fhp.topMargin = dp(6);
+        framework.addView(frameworkHint, fhp);
 
-        maxPhantom = addNumber(root, "Max phantom processes",
-                "0 = Android default · allowed range 0–128",
-                SettingsStore.maxPhantomProcesses(this));
+        frameworkToggle.setOnCheckedChangeListener((button, checked) -> {
+            SettingsStore.setFrameworkEnabled(this, checked);
+            if (checked) {
+                try { CatCoreFrameworkService.start(this); }
+                catch (Throwable t) {
+                    Toast.makeText(this, "Framework could not start: " + t.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            } else {
+                stopService(new Intent(this, CatCoreFrameworkService.class));
+            }
+        });
 
-        TextView runtimeNote = text(
-                "These values use Android device_config. OEM firmware can ignore or clamp them.",
-                12, Color.rgb(142, 154, 177), false);
-        LinearLayout.LayoutParams runtimeNoteParams = new LinearLayout.LayoutParams(-1, -2);
-        runtimeNoteParams.topMargin = dp(8);
-        root.addView(runtimeNote, runtimeNoteParams);
+        addSection("COMPATIBILITY");
+        addSwitch(
+                "Compatibility mode",
+                "Only needed for apps that do not open reliably. MultiTask performs a short activity analysis and unlocks additional fallbacks.",
+                SettingsStore.compatibilityMode(this),
+                value -> SettingsStore.setCompatibilityMode(this, value));
 
-        addSection(root, "LSPosed");
+        addSwitch(
+                "Max Stability",
+                "Uses the full launch chain and stronger LSPosed reinforcement for difficult apps.",
+                SettingsStore.maxStability(this),
+                value -> SettingsStore.setMaxStability(this, value));
 
-        LinearLayout scopeCard = card();
-        root.addView(scopeCard, cardParams());
-        scopeCard.addView(text("Recommended scope", 16, Color.WHITE, true));
-        TextView scopeText = text(
-                "For normal use select MultiTask + System Framework. You do not need to select every app. "
-                        + "Only add a specific app when you want the in-app quick button or are testing Max Stability. "
-                        + "SystemUI is not required for launching.",
-                13, Color.rgb(173, 184, 204), false);
-        LinearLayout.LayoutParams scopeTextParams = new LinearLayout.LayoutParams(-1, -2);
-        scopeTextParams.topMargin = dp(7);
-        scopeCard.addView(scopeText, scopeTextParams);
+        addSwitch(
+                "Open apps as child tasks",
+                "Experimental native-task behavior. Apps can still override it with their own manifest launchMode.",
+                SettingsStore.childTasks(this),
+                value -> SettingsStore.setChildTasks(this, value));
 
-        Button clearCache = button("Clear learned app start methods");
-        LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(-1, dp(50));
-        clearParams.topMargin = dp(12);
-        root.addView(clearCache, clearParams);
-        clearCache.setOnClickListener(v -> {
+        addSection("RUNTIME");
+        addSwitch(
+                "Restore runtime values after reboot",
+                "Re-applies the values below once Android has booted. No system partition files are replaced.",
+                SettingsStore.restoreRuntime(this),
+                value -> SettingsStore.setRestoreRuntime(this, value));
+
+        addRuntimeNumber(
+                "Max cached processes",
+                "0 = Android default · 0–512",
+                SettingsStore.maxCachedProcesses(this),
+                0, 512, true);
+
+        addRuntimeNumber(
+                "Max phantom processes",
+                "0 = Android default · 0–128",
+                SettingsStore.maxPhantomProcesses(this),
+                0, 128, false);
+
+        addSection("LSPOSED / XPOSED");
+        LinearLayout xposed = CatUi.card(this);
+        root.addView(xposed, CatUi.cardParams(this));
+
+        String xTitle = EnvironmentProbe.isXposedActive()
+                ? "LSPosed connected"
+                : "LSPosed not active in this process";
+        int xColor = EnvironmentProbe.isXposedActive() ? CatUi.GOOD : CatUi.WARN;
+        xposed.addView(CatUi.pill(this, xTitle, Color.rgb(
+                Color.red(xColor) / 3,
+                Color.green(xColor) / 3,
+                Color.blue(xColor) / 3)));
+
+        TextView xText = CatUi.text(this,
+                "The hook module is built into this APK. Recommended scope: MultiTask + System Framework. "
+                        + "You do not need to select every target app for normal launches.",
+                13, CatUi.MUTED, false);
+        LinearLayout.LayoutParams xp = new LinearLayout.LayoutParams(-1, -2);
+        xp.topMargin = dp(10);
+        xposed.addView(xText, xp);
+
+        addSection("ROOT MANAGER");
+        Button rootManager = CatUi.primaryButton(this,
+                RootPluginManager.isInstalled()
+                        ? "Root Manager · plugin connected"
+                        : "Root Manager · optional plugin");
+        root.addView(rootManager, buttonParams());
+        rootManager.setOnClickListener(v ->
+                startActivity(new Intent(this, RootManagerActivity.class)));
+
+        addSection("MAINTENANCE");
+        Button clear = CatUi.secondaryButton(this, "Clear learned app start methods");
+        root.addView(clear, buttonParams());
+        clear.setOnClickListener(v -> {
             SettingsStore.launchCache(this).edit().clear().apply();
             Toast.makeText(this, "Learned start methods cleared.", Toast.LENGTH_SHORT).show();
         });
 
-        Button save = button("Save & apply");
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, dp(54));
-        saveParams.topMargin = dp(20);
-        root.addView(save, saveParams);
-        save.setOnClickListener(v -> save());
+        Button onboarding = CatUi.secondaryButton(this, "Run setup again");
+        root.addView(onboarding, buttonParams());
+        onboarding.setOnClickListener(v -> {
+            SettingsStore.setOnboardingComplete(this, false);
+            getSharedPreferences("multitask_first_start", MODE_PRIVATE).edit().putInt("step", 0).apply();
+            Intent i = new Intent(this, FirstStartActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(i);
+            finishAffinity();
+        });
+
+        addSection("ADVANCED");
+        Button developer = CatUi.secondaryButton(this, "Developer Options");
+        root.addView(developer, buttonParams());
+        developer.setOnClickListener(v -> openDeveloperOptions());
 
         setContentView(scroll);
     }
 
-    private void save() {
-        int cached = parse(maxCached, 0, 512);
-        int phantom = parse(maxPhantom, 0, 128);
-        if (cached < 0 || phantom < 0) return;
+    private void addModeCard(String name, String badge, String detail, int mode) {
+        boolean selected = SettingsStore.startMode(this) == mode;
 
-        SettingsStore.save(this,
-                compatibility.isChecked(),
-                maxStability.isChecked(),
-                childTasks.isChecked(),
-                restoreRuntime.isChecked(),
-                cached,
-                phantom);
+        LinearLayout card = CatUi.card(this);
+        card.setBackground(CatUi.stroke(this,
+                selected ? Color.rgb(27, 35, 63) : CatUi.SURFACE,
+                22,
+                selected ? CatUi.ACCENT : Color.rgb(38, 45, 63)));
+        root.addView(card, CatUi.cardParams(this));
 
-        RuntimeTuning.applyAsync(this, true, (ok, message) -> {
-            new AlertDialog.Builder(this)
-                    .setTitle(ok ? "Settings applied" : "Settings saved")
-                    .setMessage(message + (ok ? "" :
-                            "\n\nSome runtime values could not be applied. Check root access."))
-                    .setPositiveButton("OK", null)
-                    .show();
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(row);
+
+        row.addView(CatUi.text(this, name, 16, CatUi.TEXT, true),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        row.addView(CatUi.pill(this,
+                selected ? "ACTIVE" : badge,
+                selected ? Color.rgb(57, 77, 163) : Color.rgb(43, 50, 68)));
+
+        TextView d = CatUi.text(this, detail, 12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams dpv = new LinearLayout.LayoutParams(-1, -2);
+        dpv.topMargin = dp(8);
+        card.addView(d, dpv);
+
+        card.setOnClickListener(v -> {
+            SettingsStore.setStartMode(this, mode);
+            build();
         });
     }
 
-    private int parse(EditText input, int min, int max) {
-        try {
-            int value = Integer.parseInt(input.getText().toString().trim());
-            if (value < min || value > max) {
-                input.setError("Allowed: " + min + "–" + max);
-                return -1;
-            }
-            return value;
-        } catch (Throwable t) {
-            input.setError("Enter a number");
-            return -1;
-        }
-    }
+    private void addRuntimeNumber(String title, String subtitle, int value,
+                                  int min, int max, boolean cached) {
+        LinearLayout card = CatUi.card(this);
+        root.addView(card, CatUi.cardParams(this));
+        card.addView(CatUi.text(this, title, 15, CatUi.TEXT, true));
 
-    private SwitchCompat addSwitch(LinearLayout root, String title, String subtitle,
-                                   boolean checked) {
-        LinearLayout card = card();
-        root.addView(card, cardParams());
-
-        SwitchCompat toggle = new SwitchCompat(this);
-        toggle.setText(title);
-        toggle.setTextColor(Color.WHITE);
-        toggle.setTextSize(16);
-        toggle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        toggle.setChecked(checked);
-        card.addView(toggle, new LinearLayout.LayoutParams(-1, -2));
-
-        TextView hint = text(subtitle, 12, Color.rgb(156, 168, 190), false);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.topMargin = dp(5);
-        card.addView(hint, p);
-        return toggle;
-    }
-
-    private EditText addNumber(LinearLayout root, String title, String subtitle, int value) {
-        LinearLayout card = card();
-        root.addView(card, cardParams());
-        card.addView(text(title, 15, Color.WHITE, true));
-
-        TextView hint = text(subtitle, 12, Color.rgb(156, 168, 190), false);
-        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
-        hintParams.topMargin = dp(4);
-        card.addView(hint, hintParams);
+        TextView hint = CatUi.text(this, subtitle, 12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.topMargin = dp(4);
+        card.addView(hint, hp);
 
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
         input.setText(String.valueOf(value));
-        input.setTextColor(Color.WHITE);
+        input.setTextColor(CatUi.TEXT);
+        input.setHintTextColor(CatUi.MUTED);
         input.setSingleLine(true);
-        input.setBackground(shape(Color.rgb(34, 40, 55), dp(12)));
         input.setPadding(dp(14), 0, dp(14), 0);
-        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(-1, dp(48));
-        inputParams.topMargin = dp(10);
-        card.addView(input, inputParams);
-        return input;
+        input.setBackground(CatUi.shape(this, CatUi.SURFACE_3, 14));
+        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(-1, dp(50));
+        ip.topMargin = dp(10);
+        card.addView(input, ip);
+
+        input.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                scheduleRuntimeSave(input, min, max, cached);
+            }
+            public void afterTextChanged(Editable s) {}
+        });
     }
 
-    private void addSection(LinearLayout root, String value) {
-        TextView heading = text(value.toUpperCase(), 12, Color.rgb(121, 145, 255), true);
+    private void scheduleRuntimeSave(EditText input, int min, int max, boolean cached) {
+        if (runtimeApply != null) debounce.removeCallbacks(runtimeApply);
+        runtimeApply = () -> {
+            int value;
+            try {
+                value = Integer.parseInt(input.getText().toString().trim());
+            } catch (Throwable t) {
+                return;
+            }
+
+            if (value < min || value > max) {
+                input.setError("Allowed: " + min + "–" + max);
+                return;
+            }
+
+            if (cached) SettingsStore.setMaxCachedProcesses(this, value);
+            else SettingsStore.setMaxPhantomProcesses(this, value);
+
+            RuntimeTuning.applyAsync(this, true, null);
+        };
+        debounce.postDelayed(runtimeApply, 650L);
+    }
+
+    private void addSwitch(String title, String subtitle, boolean checked, ToggleAction action) {
+        LinearLayout card = CatUi.card(this);
+        root.addView(card, CatUi.cardParams(this));
+
+        SwitchCompat toggle = new SwitchCompat(this);
+        toggle.setText(title);
+        toggle.setTextColor(CatUi.TEXT);
+        toggle.setTextSize(16);
+        toggle.setChecked(checked);
+        card.addView(toggle);
+
+        TextView hint = CatUi.text(this, subtitle, 12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.topMargin = dp(6);
+        card.addView(hint, hp);
+
+        toggle.setOnCheckedChangeListener((b, value) -> action.apply(value));
+    }
+
+    private void openDeveloperOptions() {
+        if (SettingsStore.developerWarningAccepted(this)) {
+            startActivity(new Intent(this, DeveloperOptionsActivity.class));
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Developer Options")
+                .setMessage("These controls can disable individual launch methods and make apps fail to open. "
+                        + "They are intended for debugging and compatibility research. Continue?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("I understand", (d, w) -> {
+                    SettingsStore.setDeveloperWarningAccepted(this, true);
+                    startActivity(new Intent(this, DeveloperOptionsActivity.class));
+                })
+                .show();
+    }
+
+    private void addSection(String value) {
+        TextView heading = CatUi.section(this, value);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.topMargin = dp(22);
-        p.bottomMargin = dp(5);
+        p.topMargin = dp(24);
         root.addView(heading, p);
     }
 
-    private LinearLayout card() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(15), dp(14), dp(15), dp(14));
-        card.setBackground(shape(Color.rgb(21, 25, 34), dp(18)));
-        return card;
-    }
-
-    private LinearLayout.LayoutParams cardParams() {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.topMargin = dp(8);
+    private LinearLayout.LayoutParams buttonParams() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(54));
+        p.topMargin = dp(10);
         return p;
     }
 
-    private Button button(String label) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
-        b.setGravity(Gravity.CENTER);
-        b.setBackground(shape(Color.rgb(78, 108, 232), dp(15)));
-        return b;
-    }
-
-    private TextView text(String value, int sp, int color, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(value);
-        t.setTextSize(sp);
-        t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
-    }
-
-    private GradientDrawable shape(int color, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
     private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        return CatUi.dp(this, value);
+    }
+
+    private interface ToggleAction {
+        void apply(boolean value);
     }
 }
