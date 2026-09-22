@@ -29,6 +29,7 @@ import java.util.Map;
 
 public final class MainActivity extends AppCompatActivity {
     private TextView frameworkStatus;
+    private boolean rootReady;
     private AlertDialog compatibilityDialog;
     private TextView compatibilityText;
 
@@ -89,7 +90,7 @@ public final class MainActivity extends AppCompatActivity {
         srp.topMargin = dp(16);
         hero.addView(statusRow, srp);
 
-        boolean rootReady = EnvironmentProbe.hasRoot();
+        rootReady = EnvironmentProbe.hasRoot();
         boolean xposedReady = isXposedActive();
         boolean systemHookReady = EnvironmentProbe.isSystemHookActive(this);
 
@@ -225,20 +226,31 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     public boolean isLaunchFrameworkReady() {
-        return isXposedActive() && EnvironmentProbe.isSystemHookActive(this);
+        return rootReady
+                && isXposedActive()
+                && EnvironmentProbe.isSystemHookActive(this);
     }
 
     public void showFrameworkRequired() {
         boolean xposed = isXposedActive();
         boolean systemHook = EnvironmentProbe.isSystemHookActive(this);
-        int targetStep = !xposed ? 2 : 3;
+        int targetStep = !rootReady ? 1 : (!xposed ? 2 : 3);
 
-        String message = !xposed
-                ? "MultiTask's built-in LSPosed module is not active. Enable MultiTask and keep MultiTask + System Framework in scope."
-                : "LSPosed is active, but the Android System Framework hook is not detected for this boot. Check the System Framework scope; after first activation a reboot may be required.";
+        String message;
+        String title;
+        if (!rootReady) {
+            title = "Root access required";
+            message = "MultiTask no longer has an active root grant. Re-enable it in KernelSU, Magisk or your compatible root manager and verify it in setup.";
+        } else if (!xposed) {
+            title = "LSPosed activation required";
+            message = "MultiTask's built-in LSPosed module is not active. Enable MultiTask and keep MultiTask + System Framework in scope.";
+        } else {
+            title = "System hook required";
+            message = "LSPosed is active, but the Android System Framework hook is not detected for this boot. Check the System Framework scope; after first activation a reboot may be required.";
+        }
 
         new AlertDialog.Builder(this)
-                .setTitle(!xposed ? "LSPosed activation required" : "System hook required")
+                .setTitle(title)
                 .setMessage(message)
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Open setup", (d, w) -> {
