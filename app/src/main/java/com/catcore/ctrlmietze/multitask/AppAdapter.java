@@ -19,11 +19,11 @@ import java.util.List;
 import java.util.Locale;
 
 public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
-    private final MainActivity activity;
+    private final AppStarterActivity activity;
     private final List<AppEntry> all;
     private final List<AppEntry> shown = new ArrayList<>();
 
-    AppAdapter(MainActivity activity, List<AppEntry> apps) {
+    AppAdapter(AppStarterActivity activity, List<AppEntry> apps) {
         this.activity = activity;
         this.all = apps;
         shown.addAll(apps);
