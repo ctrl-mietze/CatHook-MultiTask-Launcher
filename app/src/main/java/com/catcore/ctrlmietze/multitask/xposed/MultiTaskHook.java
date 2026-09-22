@@ -1,19 +1,26 @@
 package com.catcore.ctrlmietze.multitask.xposed;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Binder;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.UserHandle;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import com.catcore.ctrlmietze.multitask.AppTaskRules;
+import com.catcore.ctrlmietze.multitask.EnvironmentProbe;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
 import com.catcore.ctrlmietze.multitask.window.WindowFramework;
 
@@ -33,10 +40,16 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
         if (SELF.equals(lpparam.packageName)) {
             try {
                 XposedHelpers.findAndHookMethod(
+                        SELF + ".EnvironmentProbe",
+                        lpparam.classLoader,
+                        "isXposedActive",
+                        XC_MethodReplacement.returnConstant(true));
+                XposedHelpers.findAndHookMethod(
                         SELF + ".MainActivity",
                         lpparam.classLoader,
                         "isXposedActive",
                         XC_MethodReplacement.returnConstant(true));
+                XposedBridge.log("MultiTask V2: app-side LSPosed bridge active");
             } catch (Throwable t) {
                 XposedBridge.log("MultiTask self probe: " + t);
             }
@@ -63,16 +76,28 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                 return;
             }
 
+            XposedBridge.hookAllConstructors(service, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    markSystemHookActive(param.thisObject);
+                }
+            });
+
             XC_MethodHook markerHook = new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
+                    markSystemHookActive(param.thisObject);
+
                     for (Object arg : param.args) {
                         if (!(arg instanceof Intent)) continue;
                         Intent intent = (Intent) arg;
-                        if (!intent.getBooleanExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, false)) {
-                            continue;
+
+                        if (intent.getBooleanExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, false)) {
+                            reinforce(intent);
+                            break;
                         }
-                        reinforce(intent);
+
+                        scheduleAutomaticTaskRule(param.thisObject, intent);
                         break;
                     }
                 }
@@ -83,6 +108,87 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             XposedBridge.log("MultiTask: System Framework task reinforcement active");
         } catch (Throwable t) {
             XposedBridge.log("MultiTask framework hook: " + t);
+        }
+    }
+
+    private static void markSystemHookActive(Object service) {
+        try {
+            Context context = (Context) XposedHelpers.getObjectField(service, "mContext");
+            int boot = Settings.Global.getInt(
+                    context.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+            Settings.Global.putInt(
+                    context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_BOOT, boot);
+            Settings.Global.putLong(
+                    context.getContentResolver(), EnvironmentProbe.GLOBAL_HOOK_UPTIME,
+                    SystemClock.elapsedRealtime());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void scheduleAutomaticTaskRule(Object service, Intent original) {
+        try {
+            if (original == null
+                    || original.getBooleanExtra(TaskLauncher.EXTRA_RULE_SPAWN, false)
+                    || original.getBooleanExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, false)) {
+                return;
+            }
+
+            if (!Intent.ACTION_MAIN.equals(original.getAction())
+                    || !original.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+                return;
+            }
+
+            Context context = (Context) XposedHelpers.getObjectField(service, "mContext");
+            String pkg = null;
+
+            if (original.getComponent() != null) {
+                pkg = original.getComponent().getPackageName();
+            } else if (original.getPackage() != null) {
+                pkg = original.getPackage();
+            } else {
+                ResolveInfo resolved = context.getPackageManager()
+                        .resolveActivity(original, PackageManager.MATCH_DEFAULT_ONLY);
+                if (resolved != null && resolved.activityInfo != null) {
+                    pkg = resolved.activityInfo.packageName;
+                }
+            }
+
+            if (pkg == null || SELF.equals(pkg)) return;
+
+            String rules = Settings.Global.getString(
+                    context.getContentResolver(), AppTaskRules.GLOBAL_RULES);
+            int desired = AppTaskRules.parseRule(rules, pkg);
+            if (desired <= 1) return;
+
+            int callingUid = Binder.getCallingUid();
+            UserHandle user = UserHandle.of(UserHandle.getUserId(callingUid));
+            Handler handler = new Handler(context.getMainLooper());
+
+            for (int i = 1; i < desired; i++) {
+                Intent clone = new Intent(original);
+                reinforce(clone);
+                clone.putExtra(TaskLauncher.EXTRA_FORCE_MULTITASK, true);
+                clone.putExtra(TaskLauncher.EXTRA_RULE_SPAWN, true);
+                int delay = 150 * i;
+
+                handler.postDelayed(() -> {
+                    try {
+                        XposedHelpers.callMethod(context, "startActivityAsUser", clone, user);
+                    } catch (Throwable hiddenApi) {
+                        try {
+                            clone.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            context.startActivity(clone);
+                        } catch (Throwable t) {
+                            XposedBridge.log("MultiTask V2 automatic task rule: " + t);
+                        }
+                    }
+                }, delay);
+            }
+
+            XposedBridge.log("MultiTask V2: scheduled " + desired
+                    + " tasks for normal launch of " + pkg);
+        } catch (Throwable t) {
+            XposedBridge.log("MultiTask V2 task rule hook: " + t);
         }
     }
 
