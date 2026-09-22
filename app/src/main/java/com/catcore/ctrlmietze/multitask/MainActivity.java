@@ -56,7 +56,7 @@ public final class MainActivity extends AppCompatActivity {
         TextView title = text("MultiTask", 30, Color.WHITE, true);
         headerText.addView(title);
 
-        TextView subtitle = text("Open another task without cloning the app.", 13,
+        TextView subtitle = text("Open apps inside independent live windows.", 13,
                 Color.rgb(160, 171, 192), false);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
         subtitleParams.topMargin = dp(2);
@@ -242,7 +242,7 @@ public final class MainActivity extends AppCompatActivity {
                 active ? Color.rgb(52, 211, 153) : Color.rgb(244, 105, 117), dp(6)));
         statusTitle.setText(active ? "LSPosed connected" : "LSPosed is not active");
         statusHint.setText(active
-                ? "Ready. MultiTask will learn the fastest working start method per app."
+                ? "V2 window framework ready. Apps open inside MultiTask-owned displays."
                 : "Enable the module first. Recommended scope: MultiTask + System Framework.");
     }
 
