@@ -74,7 +74,7 @@ public final class SettingsActivity extends AppCompatActivity {
         addModeCard(
                 "Start as app's own task",
                 "Native app task",
-                "Keeps the app in its own Android task and uses the root + LSPosed fallback chain.",
+                "Uses MultiTask's native LSPosed system_server bridge first. Root launch paths stay behind explicit Max Stability compatibility mode.",
                 SettingsStore.MODE_APP_OWN_TASK);
 
         addSection("CATCORE FRAMEWORK");
