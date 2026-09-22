@@ -17,9 +17,13 @@ public final class RuntimeTuning {
     private RuntimeTuning() {}
 
     public static void applyAsync(Context context, Callback callback) {
+        applyAsync(context, false, callback);
+    }
+
+    public static void applyAsync(Context context, boolean resetDefaults, Callback callback) {
         Context app = context.getApplicationContext();
         EXEC.execute(() -> {
-            Result result = applyBlocking(app);
+            Result result = applyBlocking(app, resetDefaults);
             if (callback != null) {
                 new Handler(Looper.getMainLooper()).post(() -> callback.onDone(result.ok, result.message));
             }
@@ -27,6 +31,10 @@ public final class RuntimeTuning {
     }
 
     public static Result applyBlocking(Context context) {
+        return applyBlocking(context, false);
+    }
+
+    public static Result applyBlocking(Context context, boolean resetDefaults) {
         int cached = SettingsStore.maxCachedProcesses(context);
         int phantom = SettingsStore.maxPhantomProcesses(context);
 
@@ -38,10 +46,12 @@ public final class RuntimeTuning {
                     "device_config put activity_manager max_cached_processes " + cached, 5);
             ok &= r.ok;
             message.append("Cached processes: ").append(r.ok ? cached : RootShell.shortReason(r)).append('\n');
-        } else {
+        } else if (resetDefaults) {
             RootShell.Result r = RootShell.run(
                     "device_config delete activity_manager max_cached_processes", 5);
             ok &= r.ok || r.code == 0;
+            message.append("Cached processes: system default").append('\n');
+        } else {
             message.append("Cached processes: system default").append('\n');
         }
 
@@ -49,11 +59,13 @@ public final class RuntimeTuning {
             RootShell.Result r = RootShell.run(
                     "device_config put activity_manager max_phantom_processes " + phantom, 5);
             ok &= r.ok;
-            message.append("Phantom processes: ").append(r.ok ? phantom : RootShell.shortReason(r)).append('\n');
-        } else {
+            message.append("Phantom processes: ").append(r.ok ? phantom : RootShell.shortReason(r));
+        } else if (resetDefaults) {
             RootShell.Result r = RootShell.run(
                     "device_config delete activity_manager max_phantom_processes", 5);
             ok &= r.ok || r.code == 0;
+            message.append("Phantom processes: system default");
+        } else {
             message.append("Phantom processes: system default");
         }
 
