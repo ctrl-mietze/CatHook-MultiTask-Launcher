@@ -29,6 +29,14 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         shown.addAll(apps);
     }
 
+    void replaceAll(List<AppEntry> apps) {
+        all.clear();
+        all.addAll(apps);
+        shown.clear();
+        shown.addAll(apps);
+        notifyDataSetChanged();
+    }
+
     void filter(String query) {
         shown.clear();
         String text = query.trim().toLowerCase(Locale.ROOT);
@@ -99,7 +107,17 @@ public final class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     @Override
     public void onBindViewHolder(Holder holder, int position) {
         AppEntry app = shown.get(position);
-        holder.icon.setImageDrawable(app.icon);
+        holder.icon.setTag(app.packageName);
+        if (app.icon != null) {
+            holder.icon.setImageDrawable(app.icon);
+        } else {
+            holder.icon.setImageResource(android.R.drawable.sym_def_app_icon);
+            AppCatalog.loadIconAsync(activity, app.packageName, drawable -> {
+                Object tag = holder.icon.getTag();
+                if (!app.packageName.equals(tag) || drawable == null) return;
+                holder.icon.setImageDrawable(drawable);
+            });
+        }
         holder.name.setText(app.label);
         holder.packageName.setText(app.packageName);
 
