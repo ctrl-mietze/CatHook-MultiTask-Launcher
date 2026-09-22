@@ -1,7 +1,10 @@
 package com.catcore.ctrlmietze.multitask;
 
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.text.InputType;
@@ -25,6 +28,7 @@ public final class AppStarterActivity extends AppCompatActivity {
     private AppAdapter adapter;
     private TextView appCount;
     private EditText searchBox;
+    private BroadcastReceiver catalogReceiver;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -113,9 +117,12 @@ public final class AppStarterActivity extends AppCompatActivity {
             public void afterTextChanged(android.text.Editable editable) {}
         });
 
+        registerCatalogReceiver();
+
         if (apps.isEmpty()) {
             AppCatalog.refreshAsync(this, true, this::applyCatalog);
         } else if (SettingsStore.frameworkEnabled(this)) {
+            // Framework refreshes out-of-band; the cached list is already visible.
             CatCoreFrameworkService.requestCatalogRefresh(this);
         } else if (AppCatalog.needsRefresh(this)) {
             AppCatalog.refreshAsync(this, true, this::applyCatalog);
@@ -130,6 +137,36 @@ public final class AppStarterActivity extends AppCompatActivity {
         List<AppEntry> cached = AppCatalog.loadCached(this);
         if (!cached.isEmpty() && adapter != null) {
             applyCatalog(cached);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (catalogReceiver != null) {
+            try { unregisterReceiver(catalogReceiver); } catch (Throwable ignored) {}
+            catalogReceiver = null;
+        }
+        super.onDestroy();
+    }
+
+    private void registerCatalogReceiver() {
+        catalogReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                List<AppEntry> latest = AppCatalog.loadCached(AppStarterActivity.this);
+                if (!latest.isEmpty()) applyCatalog(latest);
+            }
+        };
+
+        IntentFilter filter = new IntentFilter(AppCatalog.ACTION_UPDATED);
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(catalogReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(catalogReceiver, filter);
+            }
+        } catch (Throwable ignored) {
+            catalogReceiver = null;
         }
     }
 
