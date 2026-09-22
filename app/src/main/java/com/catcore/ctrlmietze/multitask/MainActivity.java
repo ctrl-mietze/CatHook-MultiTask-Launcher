@@ -26,9 +26,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
     private TextView frameworkStatus;
+    private TextView taskManagerSummary;
+    private final ExecutorService dashboardExec = Executors.newSingleThreadExecutor();
     private boolean rootReady;
     private AlertDialog compatibilityDialog;
     private TextView compatibilityText;
@@ -137,30 +141,65 @@ public final class MainActivity extends AppCompatActivity {
         modeCard.setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
-        ap.topMargin = dp(12);
-        root.addView(actions, ap);
+        LinearLayout taskHub = CatUi.card(this);
+        taskHub.setBackground(CatUi.dashboard(this));
+        LinearLayout.LayoutParams thp = CatUi.cardParams(this);
+        thp.topMargin = dp(14);
+        root.addView(taskHub, thp);
 
-        Button tasks = CatUi.primaryButton(this, "Task Manager");
-        actions.addView(tasks, new LinearLayout.LayoutParams(0, dp(52), 1));
-        tasks.setOnClickListener(v ->
-                startActivity(new Intent(this, TaskManagerActivity.class)));
+        LinearLayout taskTop = new LinearLayout(this);
+        taskTop.setGravity(Gravity.CENTER_VERTICAL);
+        taskHub.addView(taskTop);
+
+        LinearLayout taskText = new LinearLayout(this);
+        taskText.setOrientation(LinearLayout.VERTICAL);
+        taskTop.addView(taskText, new LinearLayout.LayoutParams(0, -2, 1));
+
+        TextView taskKicker = CatUi.text(this, "LIVE CONTROL", 10,
+                Color.rgb(151, 169, 255), true);
+        taskKicker.setLetterSpacing(0.11f);
+        taskText.addView(taskKicker);
+
+        taskText.addView(CatUi.text(this, "Task Manager", 22, CatUi.TEXT, true));
+
+        taskManagerSummary = CatUi.text(
+                this,
+                "Reading running apps and tasks…",
+                12,
+                Color.rgb(190, 202, 229),
+                false);
+        LinearLayout.LayoutParams tsp = new LinearLayout.LayoutParams(-1, -2);
+        tsp.topMargin = dp(5);
+        taskText.addView(taskManagerSummary, tsp);
+
+        TextView live = CatUi.pill(this, "LIVE", Color.rgb(33, 100, 78));
+        taskTop.addView(live, new LinearLayout.LayoutParams(dp(58), dp(32)));
+
+        TextView taskHint = CatUi.text(
+                this,
+                "Open live tasks, inspect RAM / CPU / displays, create additional sessions or close duplicate tasks.",
+                12, CatUi.MUTED, false);
+        LinearLayout.LayoutParams tip = new LinearLayout.LayoutParams(-1, -2);
+        tip.topMargin = dp(11);
+        taskHub.addView(taskHint, tip);
+
+        Button openTasks = CatUi.primaryButton(this, "Open Task Manager");
+        LinearLayout.LayoutParams otp = new LinearLayout.LayoutParams(-1, dp(52));
+        otp.topMargin = dp(14);
+        taskHub.addView(openTasks, otp);
+
+        View.OnClickListener taskOpen = v ->
+                startActivity(new Intent(this, TaskManagerActivity.class));
+        taskHub.setOnClickListener(taskOpen);
+        openTasks.setOnClickListener(taskOpen);
+        CatUi.pressScale(taskHub);
 
         Button settings = CatUi.secondaryButton(this, "Settings");
-        LinearLayout.LayoutParams setp = new LinearLayout.LayoutParams(0, dp(52), 1);
-        setp.leftMargin = dp(8);
-        actions.addView(settings, setp);
+        LinearLayout.LayoutParams setp = new LinearLayout.LayoutParams(-1, dp(52));
+        setp.topMargin = dp(10);
+        root.addView(settings, setp);
         settings.setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
-
-        Button rootManager = CatUi.secondaryButton(this, "Root");
-        LinearLayout.LayoutParams rmp = new LinearLayout.LayoutParams(dp(74), dp(52));
-        rmp.leftMargin = dp(8);
-        actions.addView(rootManager, rmp);
-        rootManager.setOnClickListener(v ->
-                startActivity(new Intent(this, RootManagerActivity.class)));
 
         LinearLayout appsHeader = new LinearLayout(this);
         appsHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -205,6 +244,8 @@ public final class MainActivity extends AppCompatActivity {
             public void afterTextChanged(android.text.Editable editable) {}
         });
 
+        refreshTaskManagerSummary();
+
         if (SettingsStore.restoreRuntime(this)) {
             RuntimeTuning.applyAsync(this, null);
         }
@@ -219,6 +260,13 @@ public final class MainActivity extends AppCompatActivity {
             frameworkStatus.setBackground(CatUi.shape(this,
                     running ? Color.rgb(29, 78, 62) : Color.rgb(88, 67, 28), 999));
         }
+        refreshTaskManagerSummary();
+    }
+
+    @Override
+    protected void onDestroy() {
+        dashboardExec.shutdownNow();
+        super.onDestroy();
     }
 
     public boolean isXposedActive() {
@@ -356,6 +404,64 @@ public final class MainActivity extends AppCompatActivity {
                 }));
 
         dialog.show();
+    }
+
+    private void refreshTaskManagerSummary() {
+        if (taskManagerSummary == null || dashboardExec.isShutdown()) return;
+
+        dashboardExec.execute(() -> {
+            List<TaskInspector.TaskInfo> tasks;
+            try {
+                tasks = TaskInspector.readUserTasks(this);
+            } catch (Throwable t) {
+                tasks = new ArrayList<>();
+            }
+
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            long ram = 0L;
+            Map<String, Long> ramByPackage = new LinkedHashMap<>();
+
+            for (TaskInspector.TaskInfo task : tasks) {
+                counts.put(task.packageName,
+                        counts.getOrDefault(task.packageName, 0) + 1);
+                Long known = ramByPackage.get(task.packageName);
+                if (known == null || task.rssBytes > known) {
+                    ramByPackage.put(task.packageName, task.rssBytes);
+                }
+            }
+
+            for (Long value : ramByPackage.values()) {
+                if (value != null) ram += value;
+            }
+
+            int multi = 0;
+            for (Integer count : counts.values()) {
+                if (count != null && count > 1) multi++;
+            }
+
+            final int appCount = counts.size();
+            final int taskCount = tasks.size();
+            final int multiCount = multi;
+            final long ramBytes = ram;
+
+            runOnUiThread(() -> {
+                if (taskManagerSummary == null) return;
+                taskManagerSummary.setText(
+                        appCount + " running app" + (appCount == 1 ? "" : "s")
+                                + " · " + taskCount + " task" + (taskCount == 1 ? "" : "s")
+                                + " · " + multiCount + " MultiTask"
+                                + " · " + formatRamShort(ramBytes));
+            });
+        });
+    }
+
+    private static String formatRamShort(long bytes) {
+        if (bytes <= 0L) return "RAM --";
+        double mib = bytes / 1048576d;
+        if (mib >= 1024d) {
+            return String.format(java.util.Locale.US, "%.1f GB RAM", mib / 1024d);
+        }
+        return String.format(java.util.Locale.US, "%.0f MB RAM", mib);
     }
 
     private TextView statusPill(String value, int color) {
