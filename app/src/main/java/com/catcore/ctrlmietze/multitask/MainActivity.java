@@ -70,7 +70,7 @@ public final class MainActivity extends AppCompatActivity {
         sp.topMargin = dp(5);
         brand.addView(subtitle, sp);
 
-        TextView version = CatUi.pill(this, "V2 DEV6", Color.rgb(56, 65, 128));
+        TextView version = CatUi.pill(this, "V2 DEV7", Color.rgb(56, 65, 128));
         heroTop.addView(version, new LinearLayout.LayoutParams(dp(82), dp(34)));
 
         rootReady = EnvironmentProbe.hasRoot();
@@ -313,25 +313,13 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showModeSelector() {
-        final String[] modes = {
-                "Start as my task",
-                "Start as app's own task"
-        };
+        final String[] modes = {"Start as my task", "Start as app's own task"};
         int current = SettingsStore.startMode(this) == SettingsStore.MODE_APP_OWN_TASK ? 1 : 0;
-
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Main start method")
-                .setSingleChoiceItems(modes, current, (dialog, which) -> {
-                    SettingsStore.setStartMode(
-                            this,
-                            which == 1
-                                    ? SettingsStore.MODE_APP_OWN_TASK
-                                    : SettingsStore.MODE_MY_TASK);
-                    dialog.dismiss();
-                    recreate();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        CatDialog.selector(this, "Main start method", modes, current, which -> {
+            SettingsStore.setStartMode(this,
+                    which == 1 ? SettingsStore.MODE_APP_OWN_TASK : SettingsStore.MODE_MY_TASK);
+            recreate();
+        });
     }
 
     private boolean isFrameworkRunning() {
