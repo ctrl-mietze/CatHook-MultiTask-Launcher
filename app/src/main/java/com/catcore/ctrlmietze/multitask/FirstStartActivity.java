@@ -175,7 +175,7 @@ public final class FirstStartActivity extends AppCompatActivity {
         addStatus(active ? "LSPosed injection active" : "Waiting for LSPosed activation",
                 active ? CatUi.GOOD : CatUi.WARN,
                 active ? "The MultiTask app process is currently hooked."
-                        : "Open LSPosed, enable MultiTask and return here.");
+                        : "Open LSPosed, enable MultiTask and return here. MultiTask opens LSPosed through its hidden-manager secret-code entry.");
 
         primary.setText(active ? "Continue" : "Restart & verify");
         primary.setOnClickListener(v -> {
@@ -190,14 +190,24 @@ public final class FirstStartActivity extends AppCompatActivity {
 
     private void systemHookStep() {
         setHeader("3 OF 6 · SYSTEM", "Connect the Android task service",
-                "The System Framework scope is what lets MultiTask reinforce starts before Android collapses them back "
-                        + "into an existing task. It is also the bridge used by the V2 window backend.");
+                "The System Framework scope lets MultiTask hook Android's running system_server for task reinforcement "
+                        + "and the V2 window backend. No system files are replaced.");
 
         boolean active = EnvironmentProbe.isSystemHookActive(this);
         addStatus(active ? "System Framework hook active" : "System Framework hook not detected",
                 active ? CatUi.GOOD : CatUi.WARN,
-                active ? "The system_server hook was loaded during this boot."
-                        : "Make sure Android/System Framework is selected in LSPosed. A reboot can be required after first activation.");
+                active ? "The MultiTask hook is active inside system_server for this userspace session."
+                        : "If you just enabled Android/System Framework in LSPosed, the already-running system_server still has to reload. "
+                        + "Use Soft reboot below; this restarts Android userspace through KernelSU without rebooting the kernel.");
+
+        if (!active) {
+            Button openLsposed = CatUi.secondaryButton(this, "Open LSPosed");
+            LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-1, dp(50));
+            op.topMargin = dp(12);
+            body.addView(openLsposed, op);
+            CatUi.pressScale(openLsposed);
+            openLsposed.setOnClickListener(v -> openLsposed());
+        }
 
         primary.setText(active ? "Continue" : "Check again");
         primary.setOnClickListener(v -> {
@@ -206,8 +216,13 @@ public final class FirstStartActivity extends AppCompatActivity {
         });
 
         secondary.setVisibility(View.VISIBLE);
-        secondary.setText("Open LSPosed");
-        secondary.setOnClickListener(v -> openLsposed());
+        if (active) {
+            secondary.setText("Open LSPosed");
+            secondary.setOnClickListener(v -> openLsposed());
+        } else {
+            secondary.setText("Soft reboot");
+            secondary.setOnClickListener(v -> requestSoftReboot());
+        }
     }
 
     private void frameworkStep() {
@@ -322,13 +337,45 @@ public final class FirstStartActivity extends AppCompatActivity {
     }
 
     private void openLsposed() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage("org.lsposed.manager");
-        try {
-            if (launch != null) startActivity(launch);
-            else startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + getPackageName())));
-        } catch (Throwable ignored) {
-        }
+        secondary.setEnabled(false);
+        LsposedLauncher.open(this, (ok, message) -> {
+            secondary.setEnabled(true);
+            if (!ok) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Could not open LSPosed")
+                        .setMessage("The LSPosed secret-code broadcast failed.\n\n" + message)
+                        .setPositiveButton("OK", null)
+                        .show();
+            }
+        });
+    }
+
+    private void requestSoftReboot() {
+        new AlertDialog.Builder(this)
+                .setTitle("Soft reboot Android userspace?")
+                .setMessage("MultiTask will call KernelSU's native soft-reboot command. "
+                        + "The kernel stays running, but Android/SystemUI, apps and system_server restart. "
+                        + "Unsaved app state can be lost.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Soft reboot", (dialog, which) -> {
+                    primary.setEnabled(false);
+                    secondary.setEnabled(false);
+
+                    KernelSuSoftReboot.request((accepted, message) -> {
+                        if (accepted) {
+                            return;
+                        }
+
+                        primary.setEnabled(true);
+                        secondary.setEnabled(true);
+                        new AlertDialog.Builder(this)
+                                .setTitle("Soft reboot unavailable")
+                                .setMessage(message)
+                                .setPositiveButton("OK", null)
+                                .show();
+                    });
+                })
+                .show();
     }
 
     private void setHeader(String k, String t, String s) {
