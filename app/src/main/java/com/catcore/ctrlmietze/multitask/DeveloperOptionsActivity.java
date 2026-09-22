@@ -7,6 +7,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
@@ -83,6 +84,27 @@ public final class DeveloperOptionsActivity extends AppCompatActivity {
         warning.addView(wt, wtp);
 
         for (String[] method : METHODS) addMethod(method[0], method[1], method[2]);
+
+        TextView diagnosticsHeading = CatUi.section(this, "DIAGNOSTICS");
+        LinearLayout.LayoutParams dhp = new LinearLayout.LayoutParams(-1, -2);
+        dhp.topMargin = dp(24);
+        root.addView(diagnosticsHeading, dhp);
+
+        Button diagnostics = CatUi.primaryButton(this, "Export compatibility report");
+        LinearLayout.LayoutParams dip = new LinearLayout.LayoutParams(-1, dp(52));
+        dip.topMargin = dp(10);
+        root.addView(diagnostics, dip);
+        diagnostics.setOnClickListener(v -> {
+            diagnostics.setEnabled(false);
+            diagnostics.setText("Collecting diagnostics…");
+            DiagnosticsManager.export(this, (ok, location) -> {
+                diagnostics.setEnabled(true);
+                diagnostics.setText("Export compatibility report");
+                Toast.makeText(this,
+                        ok ? "Saved to " + location : location,
+                        Toast.LENGTH_LONG).show();
+            });
+        });
 
         Button reset = CatUi.secondaryButton(this, "Reset all methods");
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, dp(52));
