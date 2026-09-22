@@ -29,6 +29,15 @@ jobs:
           test -f kernelsu-module/bin/catcore-helper
           grep -q '^id=catcore_multitask_root$' kernelsu-module/module.prop
 
+      - name: Validate shell syntax
+        run: |
+          sh -n kernelsu-module/customize.sh
+          sh -n kernelsu-module/service.sh
+          sh -n kernelsu-module/boot-completed.sh
+          sh -n kernelsu-module/action.sh
+          sh -n kernelsu-module/uninstall.sh
+          sh -n kernelsu-module/bin/catcore-helper
+
       - name: Build installable ZIP
         run: |
           chmod +x kernelsu-module/*.sh kernelsu-module/bin/catcore-helper
