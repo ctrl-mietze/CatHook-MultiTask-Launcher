@@ -53,6 +53,24 @@ final class RootInputBridge {
         io.execute(() -> write(command));
     }
 
+    void sendText(int displayId, String text) {
+        if (displayId < 0 || text == null || text.isEmpty()) return;
+        String escaped = text
+                .replace("%", "%s")
+                .replace(" ", "%s")
+                .replace("&", "\\&")
+                .replace(";", "\\;")
+                .replace("|", "\\|")
+                .replace("<", "\\<")
+                .replace(">", "\\>");
+        io.execute(() -> write("input -d " + displayId + " text " + escaped));
+    }
+
+    void sendKey(int displayId, int keyCode) {
+        if (displayId < 0 || keyCode <= 0) return;
+        io.execute(() -> write("input -d " + displayId + " keyevent " + keyCode));
+    }
+
     private synchronized void write(String command) {
         try {
             ensureSession();
