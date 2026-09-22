@@ -85,35 +85,45 @@ public final class MainActivity extends AppCompatActivity {
         sp.topMargin = dp(6);
         brand.addView(subtitle, sp);
 
-        TextView version = CatUi.pill(this, "V2", Color.rgb(56, 65, 128));
-        heroTop.addView(version, new LinearLayout.LayoutParams(dp(54), dp(34)));
-
-        LinearLayout statusRow = new LinearLayout(this);
-        statusRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams srp = new LinearLayout.LayoutParams(-1, -2);
-        srp.topMargin = dp(16);
-        hero.addView(statusRow, srp);
+        TextView version = CatUi.pill(this, "V2 DEV3", Color.rgb(56, 65, 128));
+        heroTop.addView(version, new LinearLayout.LayoutParams(dp(82), dp(34)));
 
         rootReady = EnvironmentProbe.hasRoot();
         boolean xposedReady = isXposedActive();
         boolean systemHookReady = EnvironmentProbe.isSystemHookActive(this);
 
-        statusRow.addView(statusPill(
-                rootReady ? "ROOT" : "NO ROOT",
+        LinearLayout statusGrid = new LinearLayout(this);
+        statusGrid.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams sgp = new LinearLayout.LayoutParams(-1, -2);
+        sgp.topMargin = dp(16);
+        hero.addView(statusGrid, sgp);
+
+        LinearLayout statusTop = new LinearLayout(this);
+        statusTop.setGravity(Gravity.CENTER_VERTICAL);
+        statusGrid.addView(statusTop, new LinearLayout.LayoutParams(-1, dp(34)));
+
+        statusTop.addView(statusPill(
+                rootReady ? "ROOT READY" : "ROOT MISSING",
                 rootReady ? CatUi.GOOD : CatUi.BAD));
 
-        statusRow.addView(statusPill(
-                xposedReady ? "LSPOSED" : "NO LSPOSED",
+        statusTop.addView(statusPill(
+                xposedReady ? "LSPOSED ACTIVE" : "LSPOSED OFF",
                 xposedReady ? CatUi.GOOD : CatUi.BAD));
 
-        statusRow.addView(statusPill(
+        LinearLayout statusBottom = new LinearLayout(this);
+        statusBottom.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(-1, dp(34));
+        sbp.topMargin = dp(6);
+        statusGrid.addView(statusBottom, sbp);
+
+        statusBottom.addView(statusPill(
                 systemHookReady ? "SYSTEM HOOK" : "HOOK OFF",
                 systemHookReady ? CatUi.GOOD : CatUi.WARN));
 
         frameworkStatus = statusPill(
-                isFrameworkRunning() ? "FRAMEWORK" : "FRAMEWORK OFF",
+                isFrameworkRunning() ? "FRAMEWORK LIVE" : "FRAMEWORK OFF",
                 isFrameworkRunning() ? CatUi.GOOD : CatUi.WARN);
-        statusRow.addView(frameworkStatus);
+        statusBottom.addView(frameworkStatus);
 
         LinearLayout modeCard = CatUi.card(this);
         LinearLayout.LayoutParams mcp = CatUi.cardParams(this);
