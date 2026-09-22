@@ -42,18 +42,23 @@ Implemented:
 - classic V1 task fallback
 - maximum 8 concurrent workspace windows
 
-Still planned before a V2 stable release:
+Implemented in the V2 major branch:
 
-- keyboard/IME routing improvements
-- multi-touch forwarding
-- task/session restoration after process death
-- per-window audio/focus controls
-- better task lifecycle tracking
-- window snapping and layouts
-- compatibility telemetry/diagnostics
-- OEM-specific testing on Samsung/Huawei/AOSP
-- polished workspace UI and animations
+- keyboard/text routing into a selected virtual display
+- signature-protected temporary system_server input bridge for multi-touch
+- workspace/session recovery after app-process death
+- window focus controls
+- edge snapping plus Cascade/Grid/Columns layouts
+- live framework-session notification state
+- compatibility telemetry and diagnostic export
+- workspace UI animations and state persistence
+
+Still hardware-validation dependent before stable V2:
+
+- OEM-specific validation on Samsung/Huawei/AOSP
+- final tuning of multi-touch/IME behavior on real devices
+- audio remains Android/package scoped; MultiTask does not fake per-window audio isolation for arbitrary third-party apps
 
 ## Version
 
-Development builds use `2.0.0.0-dev1`. Stable V2 will use the final V2 version according to the project versioning scheme.
+Current development builds use `2.0.0.0-dev2`. Stable V2 will use the final V2 version according to the project versioning scheme.
