@@ -47,6 +47,14 @@ pkg="$2"
 case "$cmd" in
     status)
         echo "CatCore MultiTask Root Helper ready"
+        echo "TASK_BROKER=activity_manager_root"
+        if [ -d /data/adb/modules/zygisksu ] || [ -d /data/adb/modules/zygisk_next ]; then
+            echo "ZYGISK=detected"
+        elif [ -d /data/adb/modules/metamodule ] || [ -d /data/adb/modules/meta-module ]; then
+            echo "META_MODULE=detected"
+        else
+            echo "ZYGISK=not-required"
+        fi
         exit 0
         ;;
 
