@@ -270,6 +270,9 @@ public final class MainActivity extends AppCompatActivity {
             frameworkStatus.setBackground(CatUi.shape(this,
                     running ? Color.rgb(29, 78, 62) : Color.rgb(88, 67, 28), 999));
         }
+        if (!dashboardExec.isShutdown()) {
+            dashboardExec.execute(() -> rootReady = EnvironmentProbe.hasRoot());
+        }
         refreshTaskManagerSummary();
     }
 
@@ -284,6 +287,9 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     public boolean isLaunchFrameworkReady() {
+        if (!rootReady) {
+            rootReady = EnvironmentProbe.hasRoot();
+        }
         return rootReady
                 && isXposedActive()
                 && EnvironmentProbe.isSystemHookActive(this);
@@ -304,7 +310,7 @@ public final class MainActivity extends AppCompatActivity {
             message = "MultiTask's built-in LSPosed module is not active. Enable MultiTask and keep MultiTask + System Framework in scope.";
         } else {
             title = "System hook required";
-            message = "LSPosed is active, but the Android System Framework hook is not detected for this boot. Check the System Framework scope; after first activation a reboot may be required.";
+            message = "LSPosed is active, but the Android System Framework hook is not detected in the running system_server. Check the System Framework scope and use the Soft reboot option in setup to reload Android userspace.";
         }
 
         new AlertDialog.Builder(this)
