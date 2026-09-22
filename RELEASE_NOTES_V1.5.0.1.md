@@ -16,9 +16,11 @@ Major update of the CatHook MultiTask launcher.
 - Refined UI and launcher name: **MultiTask**.
 - Release builds now use a persistent signing key so future versions can be installed as normal updates.
 
-## Signing migration
+## Important update note
 
-v1.5.0.1 starts a new permanent release-signing lineage. Because v0.1.0 was built with an ephemeral CI debug key, v0.1.0 may need to be uninstalled once before installing this release. Future versions signed with the same release key can be installed directly over v1.5.0.1.
+For this release only, users upgrading from **v0.1.0** need to uninstall the old app before installing **v1.5.0.1**. The previous release was signed with a temporary build key, while v1.5.0.1 introduces MultiTask's new permanent release-signing key.
+
+This is a one-time migration. Starting with **v1.5.0.1**, future MultiTask releases signed with the same key can be installed normally over the existing app, so settings and app data can remain in place during updates.
 
 ## Versioning
 
