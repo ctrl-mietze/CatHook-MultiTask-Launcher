@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="CatCore MultiTask" width="100%">
+  <img src="docs/assets/banner.svg" alt="MultiTask" width="100%">
 </p>
 
 <p align="center">
@@ -9,58 +9,55 @@
 <p align="center">
   <a href="https://github.com/ctrl-mietze/CatHook-MultiTask-Launcher/releases/latest"><img src="https://img.shields.io/github/v/release/ctrl-mietze/CatHook-MultiTask-Launcher?style=for-the-badge&color=F59E42&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/Android-9–16-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 9–16">
-  <img src="https://img.shields.io/badge/Root-required-EA580C?style=for-the-badge" alt="Root required">
-  <img src="https://img.shields.io/badge/LSPosed-optional-7C3AED?style=for-the-badge" alt="LSPosed optional">
+  <img src="https://img.shields.io/badge/LSPosed-required-7C3AED?style=for-the-badge" alt="LSPosed erforderlich">
 </p>
 
-<p align="center"><strong>Starte dieselbe Android-App im selben Benutzerprofil als zusätzlichen Task.</strong></p>
+<p align="center"><strong>Öffne dieselbe Android-App im selben Benutzerprofil als zusätzliche Tasks.</strong></p>
 
-CatCore MultiTask ist ein fokussierter Android-Launcher mit Root-Unterstützung und optionalem LSPosed-Schnellbutton. Die App zeigt deine installierten User-Apps in einer durchsuchbaren Oberfläche und startet die ausgewählte Activity mit Androids MultiTask- und Document-Flags.
+MultiTask ist ein Android-MultiTask-Launcher mit LSPosed-Verstärkung im System Framework, optionalem Root-Start und einer lernenden Fallback-Pipeline. Die App prüft mehrere mögliche Launcher-Activities, merkt sich pro Paket die funktionierende Startmethode und nutzt die langsameren Kompatibilitätsprüfungen nur bei Bedarf.
 
-## ✨ Features
+## ✨ V1.5.0.1
 
-- **Zusätzliche Android-Tasks** – öffnet eine App erneut, ohne APK-Klon oder zweites Benutzerprofil.
-- **Root-Start** – verwendet `am start` mit `NEW_TASK`, `MULTIPLE_TASK`, `NEW_DOCUMENT` und `RETAIN_IN_RECENTS`.
-- **Sicherer Fallback** – fällt auf einen normalen Android-Intent zurück, wenn Root nicht verfügbar ist.
-- **Saubere App-Auswahl** – listet ausschließlich installierte User-Apps und unterstützt Suche nach Name oder Paket.
-- **LSPosed Quick Action** – blendet in ausgewählten Apps einen kompakten `Ⅱ`-Button für einen weiteren Task ein.
-- **Moderner Dark Mode** – klare Statusanzeige, App-Icons und aufgeräumte Bedienung.
+- **Deutlich besserer App-Starter** – berücksichtigt Launcher-Aliases und mehrere mögliche Activities statt nur einer gespeicherten MainActivity.
+- **Aktueller Android-User** – kein fest verdrahtetes `--user 0` mehr.
+- **Gelernte Startmethode** – funktionierende Methoden werden pro App gespeichert und beim nächsten Mal direkt verwendet.
+- **Compatibility Mode** – analysiert problematische Apps kurz und erweitert die Fallback-Kette.
+- **Max Stability** – aktiviert die umfangreichste Start-Fallback-Kette.
+- **Task Manager** – View All / View MultiTask, laufende User-App-Tasks sowie 1–8 neue Tasks.
+- **Close all MultiTask** – reduziert Apps mit mehreren Tasks kontrolliert wieder auf eine neu geöffnete Instanz.
+- **Runtime-Einstellungen** – optionale Cached-/Phantom-Prozesswerte über Android `device_config`, auf Wunsch nach Neustart wiederhergestellt.
+- **LSPosed System Framework** – von MultiTask markierte Starts erhalten die Task-Flags zentral, ohne jede Ziel-App auswählen zu müssen.
+- **Optionaler In-App-Schnellbutton** – eine Ziel-App muss nur dann zusätzlich im LSPosed-Scope liegen, wenn dort der `Ⅱ`-Button gewünscht ist.
 
-## 📱 Installation
+## ▶ App starten
 
-1. Öffne den [neuesten Release](https://github.com/ctrl-mietze/CatHook-MultiTask-Launcher/releases/latest).
-2. Lade `CatCore-MultiTask-v0.1.0.apk` herunter und installiere die APK.
-3. Gewähre beim ersten Start Root-Zugriff.
-4. Optional: Aktiviere das Modul in LSPosed und füge **CatCore MultiTask** sowie gewünschte Ziel-Apps zum Scope hinzu.
-5. Starte die betroffenen Apps neu.
+Der alte „Quick Start“-Ablauf gilt nicht mehr.
 
-## 🧩 So funktioniert es
+1. **MultiTask** öffnen.
+2. Gewünschte App suchen.
+3. Rechts den **▶ Play-Button** drücken.
+4. Schlägt der Start fehl, zeigt MultiTask den konkreten Grund und **Open settings**.
+5. **Compatibility Mode** nur für problematische Apps aktivieren; **Max Stability** ist die letzte Stufe.
 
-| Modus | Verhalten |
-|---|---|
-| Launcher | Wähle eine User-App aus; CatCore startet deren Launcher-Activity mit MultiTask-Flags. |
-| Root | Führt den Start über `su -c am start` aus, damit alle vorgesehenen Activity-Flags gesetzt werden. |
-| LSPosed | Injiziert optional einen kleinen Schnellbutton in die vom Benutzer ausgewählten Ziel-Apps. |
+## 🧩 LSPosed
 
-> Android und die jeweilige Ziel-App entscheiden am Ende über die Task-Erstellung. Apps mit `singleTask`, `singleInstance` oder `documentLaunchMode="never"` können einen vorhandenen Task wiederverwenden.
+Modul aktivieren und **MultiTask + System Framework** im Scope lassen. Für den normalen Launcher-Betrieb müssen **nicht** alle Ziel-Apps einzeln ausgewählt werden.
+
+Eine bestimmte Ziel-App nur dann zusätzlich auswählen, wenn dort der optionale In-App-Schnellbutton gewünscht ist. SystemUI ist für den Start nicht erforderlich.
+
+> Android beziehungsweise die Ziel-App entscheidet letztlich über die Task-Erstellung. `singleTask`, `singleInstance` oder `documentLaunchMode="never"` können die Wiederverwendung eines vorhandenen Tasks erzwingen.
 
 ## 🛠️ Selbst bauen
 
 ### Android Studio
 
-1. Repository klonen.
-2. Projekt in Android Studio öffnen und Gradle synchronisieren.
-3. Die Konfiguration `app` bauen.
-
 ```bash
 gradle :app:assembleDebug
 ```
 
-Die APK liegt anschließend unter `app/build/outputs/apk/debug/app-debug.apk`.
+APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ### Termux
-
-Das enthaltene Build-Script richtet die benötigten Pakete ein, prüft ein API-36-SDK und legt APK sowie Build-Log in `Download` ab.
 
 ```bash
 chmod +x build-termux.sh
@@ -71,21 +68,13 @@ chmod +x build-termux.sh
 
 | Eigenschaft | Wert |
 |---|---|
-| Paketname | `com.catcore.ctrlmietze.multitask` |
-| Version | `0.1.0` (`versionCode 1`) |
-| Min SDK | Android 9 / API 28 |
-| Target SDK | Android 16 / API 36 |
+| Paket | `com.catcore.ctrlmietze.multitask` |
+| Version | `1.5.0.1` (`versionCode 15001`) |
+| Android | 9–16 / API 28–36 |
 | Sprache | Java 17 |
-| UI | AndroidX AppCompat + RecyclerView |
 | Xposed API | 82 |
+| Empfohlener Scope | MultiTask + System Framework |
 
 ## 🔒 Datenschutz
 
-CatCore MultiTask enthält keine Werbung, kein Tracking und keine Telemetrie. Die App verarbeitet lokal die Liste installierter Launcher-Apps und überschreibt weder Systemdateien noch fremde APKs.
-
----
-
-<p align="center">
-  <img src="docs/assets/catcore-logo.png" alt="CatCore Logo" width="140"><br>
-  <strong>Built for Android multitasking.</strong>
-</p>
+MultiTask enthält keine Werbung, kein Tracking und keine Telemetrie. Die App ersetzt keine Systemdateien und verändert keine fremden APKs. Optionale Runtime-Werte werden über Androids Konfigurationsschnittstelle gesetzt und können auf Systemstandard zurückgesetzt werden.
