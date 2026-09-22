@@ -1,0 +1,43 @@
+name: Build KernelSU Root Helper
+
+on:
+  push:
+    branches: [v2-major-rework]
+    paths:
+      - "kernelsu-module/**"
+      - ".github/workflows/kernelsu-helper.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "kernelsu-module/**"
+      - ".github/workflows/kernelsu-helper.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate module structure
+        run: |
+          test -f kernelsu-module/module.prop
+          test -f kernelsu-module/customize.sh
+          test -f kernelsu-module/service.sh
+          test -f kernelsu-module/bin/catcore-helper
+          grep -q '^id=catcore_multitask_root$' kernelsu-module/module.prop
+
+      - name: Build installable ZIP
+        run: |
+          chmod +x kernelsu-module/*.sh kernelsu-module/bin/catcore-helper
+          cd kernelsu-module
+          zip -r ../CatCore-MultiTask-Root-Helper-v2.zip . -x README.md
+          cd ..
+          unzip -l CatCore-MultiTask-Root-Helper-v2.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CatCore-MultiTask-Root-Helper-v2
+          path: CatCore-MultiTask-Root-Helper-v2.zip
