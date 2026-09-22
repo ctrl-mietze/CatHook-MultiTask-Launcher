@@ -36,6 +36,8 @@ import com.catcore.ctrlmietze.multitask.SystemTaskBridge;
 import com.catcore.ctrlmietze.multitask.window.FrameworkInputBridge;
 import com.catcore.ctrlmietze.multitask.window.WindowFramework;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -52,6 +54,8 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
     private static volatile long lastSystemHeartbeatWrite;
     private static volatile boolean frameworkBridgeRegistered;
     private static volatile boolean systemTaskBridgeRegistered;
+    private static final Set<String> activeSystemTaskPackages =
+            ConcurrentHashMap.newKeySet();
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -208,9 +212,16 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             return;
         }
 
+        if (!activeSystemTaskPackages.add(pkg)) {
+            sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+                    -1, -1, desired,
+                    "Another task request for this app is already running.");
+            return;
+        }
+
         int before = countTasksForPackage(service, pkg);
         if (before < 0) {
-            sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+            finishTaskBridge(pkg, result, SystemTaskBridge.RESULT_ERROR,
                     -1, -1, desired,
                     "Android task state could not be read safely. No launch was attempted.");
             return;
@@ -218,7 +229,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
 
         Intent base = resolveBridgeLaunchIntent(context, pkg, activity);
         if (base == null || base.getComponent() == null) {
-            sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+            finishTaskBridge(pkg, result, SystemTaskBridge.RESULT_ERROR,
                     before, before, desired,
                     "No launcher activity could be resolved for " + pkg + ".");
             return;
@@ -232,12 +243,12 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
             focus.putExtra(TaskLauncher.EXTRA_RULE_SPAWN, true);
             try {
                 XposedHelpers.callMethod(context, "startActivityAsUser", focus, user);
-                sendTaskBridgeResult(result, SystemTaskBridge.RESULT_OK,
+                finishTaskBridge(pkg, result, SystemTaskBridge.RESULT_OK,
                         before, before, desired,
                         "Task target already satisfied (" + before + "/" + desired
                                 + "). Existing task brought forward.");
             } catch (Throwable t) {
-                sendTaskBridgeResult(result, SystemTaskBridge.RESULT_ERROR,
+                finishTaskBridge(pkg, result, SystemTaskBridge.RESULT_ERROR,
                         before, before, desired,
                         "Task target is satisfied, but Android could not focus it: " + t);
             }
@@ -266,7 +277,8 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
         handler.postDelayed(() -> {
             int after = countTasksForPackage(service, pkg);
             boolean ok = after >= desired;
-            sendTaskBridgeResult(
+            finishTaskBridge(
+                    pkg,
                     result,
                     ok ? SystemTaskBridge.RESULT_OK : SystemTaskBridge.RESULT_ERROR,
                     before,
@@ -326,6 +338,18 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    private static void finishTaskBridge(
+            String pkg,
+            ResultReceiver result,
+            int code,
+            int before,
+            int after,
+            int desired,
+            String message) {
+        if (pkg != null) activeSystemTaskPackages.remove(pkg);
+        sendTaskBridgeResult(result, code, before, after, desired, message);
     }
 
     private static void sendTaskBridgeResult(
