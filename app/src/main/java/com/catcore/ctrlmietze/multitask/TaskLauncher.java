@@ -108,9 +108,13 @@ public final class TaskLauncher {
             String strategy = parts[0];
             String component = parts.length > 1 ? parts[1] : "";
 
+            boolean legacyAggressive = "root_package_full".equals(strategy)
+                    || "root_component_full".equals(strategy);
             boolean privilegedCached = strategy.startsWith("root_")
                     || "monkey".equals(strategy);
-            if (privilegedCached && !maxStability) {
+            if (legacyAggressive
+                    || (privilegedCached
+                    && (!maxStability || !SettingsStore.rootTaskStart(context)))) {
                 cache.edit().remove(pkg).apply();
             } else {
                 progress(context, progress, "Using the known working compatibility method…");
@@ -144,11 +148,10 @@ public final class TaskLauncher {
         // Root ActivityManager strategies are intentionally NOT part of the
         // normal V2 own-task path anymore. They are compatibility fallbacks
         // only, after the LSPosed system_server bridge has already failed.
-        if (maxStability) {
+        if (maxStability && SettingsStore.rootTaskStart(context)) {
             progress(context, progress, "Trying explicit Max Stability root fallbacks…");
 
             if (SettingsStore.rootHelperEnabled(context)
-                    && SettingsStore.rootTaskStart(context)
                     && RootPluginManager.isInstalled()) {
                 int before = TaskInspector.countTasksForPackage(pkg);
                 RootPluginManager.Result helper = RootPluginManager.run("launch", pkg);
