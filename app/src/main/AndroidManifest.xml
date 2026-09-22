@@ -82,6 +82,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".AppStarterActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
