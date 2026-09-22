@@ -1,7 +1,9 @@
 plugins { id("com.android.application") }
+
 android {
     namespace = "com.catcore.ctrlmietze.multitask"
     compileSdk = 36
+
     defaultConfig {
         applicationId = "com.catcore.ctrlmietze.multitask"
         minSdk = 28
@@ -9,11 +11,32 @@ android {
         versionCode = 15001
         versionName = "1.5.0.1"
     }
+
+    signingConfigs {
+        create("release") {
+            val signingStore = System.getenv("CATHOOK_STORE_FILE")
+            if (!signingStore.isNullOrBlank()) {
+                storeFile = file(signingStore)
+                storePassword = System.getenv("CATHOOK_STORE_PASSWORD")
+                keyAlias = System.getenv("CATHOOK_KEY_ALIAS")
+                keyPassword = System.getenv("CATHOOK_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.recyclerview:recyclerview:1.4.0")
