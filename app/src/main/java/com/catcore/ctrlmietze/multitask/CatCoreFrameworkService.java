@@ -5,8 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.os.Build;
@@ -15,6 +17,11 @@ import android.os.IBinder;
 public final class CatCoreFrameworkService extends Service {
     public static final String CHANNEL_ID = "catcore_multitask_framework";
     public static final int NOTIFICATION_ID = 2042;
+    private static final String ACTION_REFRESH_CATALOG =
+            "com.catcore.ctrlmietze.multitask.action.REFRESH_CATALOG";
+
+    private FrameworkHealthMonitor healthMonitor;
+    private BroadcastReceiver packageReceiver;
 
     @Override
     public void onCreate() {
@@ -29,6 +36,12 @@ public final class CatCoreFrameworkService extends Service {
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
+
+        registerPackageWatcher();
+        AppCatalog.refreshAsync(this, AppCatalog.needsRefresh(this), null);
+
+        healthMonitor = new FrameworkHealthMonitor(this, this::publishFrameworkStatus);
+        healthMonitor.start();
     }
 
     @Override
@@ -37,8 +50,13 @@ public final class CatCoreFrameworkService extends Service {
         if (intent != null && intent.hasExtra("status")) {
             detail = intent.getStringExtra("status");
         }
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) manager.notify(NOTIFICATION_ID, buildNotification(detail));
+
+        if (intent != null && ACTION_REFRESH_CATALOG.equals(intent.getAction())) {
+            AppCatalog.refreshAsync(this, true, null);
+            detail = "Framework active · updating app catalog";
+        }
+
+        publishFrameworkStatus(detail);
         return START_STICKY;
     }
 
@@ -47,13 +65,62 @@ public final class CatCoreFrameworkService extends Service {
         return null;
     }
 
+    @Override
+    public void onDestroy() {
+        if (healthMonitor != null) {
+            healthMonitor.stop();
+            healthMonitor = null;
+        }
+
+        if (packageReceiver != null) {
+            try { unregisterReceiver(packageReceiver); } catch (Throwable ignored) {}
+            packageReceiver = null;
+        }
+
+        super.onDestroy();
+    }
+
+    private void registerPackageWatcher() {
+        packageReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                AppCatalog.refreshAsync(CatCoreFrameworkService.this, true, null);
+            }
+        };
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_PACKAGE_ADDED);
+        filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        filter.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        filter.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        filter.addDataScheme("package");
+
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(packageReceiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(packageReceiver, filter);
+            }
+        } catch (Throwable ignored) {
+            packageReceiver = null;
+        }
+    }
+
+    private void publishFrameworkStatus(String status) {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.notify(NOTIFICATION_ID,
+                    buildNotification(status == null ? "Framework active" : status));
+        }
+    }
+
     private void createChannel() {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
                 "MultiTask Framework",
                 NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("Keeps the CatCore MultiTask framework available for task and window sessions.");
+        channel.setDescription("Keeps the CatCore MultiTask framework available for task, app catalog and stability sessions.");
         channel.setShowBadge(false);
         channel.enableLights(false);
         channel.enableVibration(false);
@@ -92,6 +159,13 @@ public final class CatCoreFrameworkService extends Service {
     public static void updateStatus(Context context, String status) {
         Intent intent = new Intent(context, CatCoreFrameworkService.class);
         intent.putExtra("status", status == null ? "Framework active" : status);
+        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
+        else context.startService(intent);
+    }
+
+    public static void requestCatalogRefresh(Context context) {
+        Intent intent = new Intent(context, CatCoreFrameworkService.class)
+                .setAction(ACTION_REFRESH_CATALOG);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
         else context.startService(intent);
     }
