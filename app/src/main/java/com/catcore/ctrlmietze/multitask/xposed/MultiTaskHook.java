@@ -1,20 +1,28 @@
 package com.catcore.ctrlmietze.multitask.xposed;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.hardware.input.InputManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.UserHandle;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.InputDevice;
+import android.view.KeyCharacterMap;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -23,6 +31,7 @@ import android.widget.TextView;
 import com.catcore.ctrlmietze.multitask.AppTaskRules;
 import com.catcore.ctrlmietze.multitask.EnvironmentProbe;
 import com.catcore.ctrlmietze.multitask.TaskLauncher;
+import com.catcore.ctrlmietze.multitask.window.FrameworkInputBridge;
 import com.catcore.ctrlmietze.multitask.window.WindowFramework;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,6 +48,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
     private static final String SELF = "com.catcore.ctrlmietze.multitask";
     private static volatile long stabilityWindowUntil;
     private static volatile long lastSystemHeartbeatWrite;
+    private static volatile boolean frameworkBridgeRegistered;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -85,6 +95,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     markSystemHookActive(param.thisObject);
+                    registerFrameworkInputBridge(param.thisObject);
                 }
             });
 
@@ -92,6 +103,7 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     markSystemHookActive(param.thisObject);
+                    registerFrameworkInputBridge(param.thisObject);
 
                     for (Object arg : param.args) {
                         if (!(arg instanceof Intent)) continue;
@@ -114,6 +126,174 @@ public final class MultiTaskHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log("MultiTask framework hook: " + t);
         }
+    }
+
+    private static void registerFrameworkInputBridge(Object service) {
+        if (frameworkBridgeRegistered) return;
+
+        synchronized (MultiTaskHook.class) {
+            if (frameworkBridgeRegistered) return;
+
+            try {
+                Context context = (Context) XposedHelpers.getObjectField(service, "mContext");
+                IntentFilter filter = new IntentFilter(FrameworkInputBridge.ACTION);
+                Handler handler = new Handler(context.getMainLooper());
+
+                BroadcastReceiver receiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context receiverContext, Intent intent) {
+                        if (intent == null
+                                || !FrameworkInputBridge.ACTION.equals(intent.getAction())) {
+                            return;
+                        }
+
+                        try {
+                            injectFrameworkInput(receiverContext, intent);
+                        } catch (Throwable t) {
+                            XposedBridge.log("MultiTask V2 framework input: " + t);
+                        }
+                    }
+                };
+
+                if (Build.VERSION.SDK_INT >= 33) {
+                    context.registerReceiver(
+                            receiver,
+                            filter,
+                            FrameworkInputBridge.PERMISSION,
+                            handler,
+                            Context.RECEIVER_EXPORTED);
+                } else {
+                    context.registerReceiver(
+                            receiver,
+                            filter,
+                            FrameworkInputBridge.PERMISSION,
+                            handler);
+                }
+
+                frameworkBridgeRegistered = true;
+                XposedBridge.log("MultiTask V2: temporary framework input bridge active");
+            } catch (Throwable t) {
+                XposedBridge.log("MultiTask V2 input bridge registration: " + t);
+            }
+        }
+    }
+
+    private static void injectFrameworkInput(Context context, Intent intent) {
+        int displayId = intent.getIntExtra("display_id", -1);
+        if (displayId < 0) return;
+
+        String type = intent.getStringExtra("type");
+        InputManager inputManager = (InputManager)
+                context.getSystemService(Context.INPUT_SERVICE);
+        if (inputManager == null || type == null) return;
+
+        if (FrameworkInputBridge.TYPE_TOUCH.equals(type)) {
+            injectTouch(inputManager, displayId, intent);
+        } else if (FrameworkInputBridge.TYPE_TEXT.equals(type)) {
+            String text = intent.getStringExtra("text");
+            if (text == null || text.isEmpty()) return;
+
+            KeyEvent[] events = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD)
+                    .getEvents(text.toCharArray());
+            if (events == null) return;
+
+            for (KeyEvent event : events) {
+                setInputDisplay(event, displayId);
+                injectInputEvent(inputManager, event);
+            }
+        } else if (FrameworkInputBridge.TYPE_KEY.equals(type)) {
+            int keyCode = intent.getIntExtra("key_code", 0);
+            if (keyCode <= 0) return;
+
+            long now = SystemClock.uptimeMillis();
+            KeyEvent down = new KeyEvent(now, now,
+                    KeyEvent.ACTION_DOWN, keyCode, 0);
+            KeyEvent up = new KeyEvent(now, now + 8,
+                    KeyEvent.ACTION_UP, keyCode, 0);
+            setInputDisplay(down, displayId);
+            setInputDisplay(up, displayId);
+            injectInputEvent(inputManager, down);
+            injectInputEvent(inputManager, up);
+        }
+    }
+
+    private static void injectTouch(InputManager inputManager, int displayId, Intent intent) {
+        int[] ids = intent.getIntArrayExtra("pointer_ids");
+        int[] tools = intent.getIntArrayExtra("tool_types");
+        float[] xs = intent.getFloatArrayExtra("xs");
+        float[] ys = intent.getFloatArrayExtra("ys");
+        float[] pressures = intent.getFloatArrayExtra("pressures");
+        float[] sizes = intent.getFloatArrayExtra("sizes");
+
+        if (ids == null || xs == null || ys == null) return;
+        int count = Math.min(ids.length, Math.min(xs.length, ys.length));
+        if (count <= 0 || count > 10) return;
+
+        MotionEvent.PointerProperties[] properties =
+                new MotionEvent.PointerProperties[count];
+        MotionEvent.PointerCoords[] coordinates =
+                new MotionEvent.PointerCoords[count];
+
+        for (int i = 0; i < count; i++) {
+            MotionEvent.PointerProperties p = new MotionEvent.PointerProperties();
+            p.id = ids[i];
+            p.toolType = tools != null && i < tools.length
+                    ? tools[i] : MotionEvent.TOOL_TYPE_FINGER;
+            properties[i] = p;
+
+            MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
+            pc.x = xs[i];
+            pc.y = ys[i];
+            pc.pressure = pressures != null && i < pressures.length
+                    ? pressures[i] : 1f;
+            pc.size = sizes != null && i < sizes.length
+                    ? sizes[i] : 1f;
+            coordinates[i] = pc;
+        }
+
+        int masked = intent.getIntExtra("action_masked", MotionEvent.ACTION_MOVE);
+        int index = Math.max(0, Math.min(
+                intent.getIntExtra("action_index", 0), count - 1));
+        int action = masked;
+        if (masked == MotionEvent.ACTION_POINTER_DOWN
+                || masked == MotionEvent.ACTION_POINTER_UP) {
+            action |= index << MotionEvent.ACTION_POINTER_INDEX_SHIFT;
+        }
+
+        long now = SystemClock.uptimeMillis();
+        long downTime = intent.getLongExtra("down_time", now);
+        long eventTime = intent.getLongExtra("event_time", now);
+
+        MotionEvent event = MotionEvent.obtain(
+                downTime,
+                eventTime,
+                action,
+                count,
+                properties,
+                coordinates,
+                intent.getIntExtra("meta_state", 0),
+                intent.getIntExtra("button_state", 0),
+                1f,
+                1f,
+                0,
+                0,
+                InputDevice.SOURCE_TOUCHSCREEN,
+                0);
+
+        setInputDisplay(event, displayId);
+        injectInputEvent(inputManager, event);
+        event.recycle();
+    }
+
+    private static void setInputDisplay(Object event, int displayId) {
+        try {
+            XposedHelpers.callMethod(event, "setDisplayId", displayId);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void injectInputEvent(InputManager inputManager, Object event) {
+        XposedHelpers.callMethod(inputManager, "injectInputEvent", event, 0);
     }
 
     private static void markSystemHookActive(Object service) {
