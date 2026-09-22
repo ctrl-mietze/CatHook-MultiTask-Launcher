@@ -2,8 +2,17 @@ plugins { id("com.android.application") }
 android {
     namespace = "com.catcore.ctrlmietze.multitask"
     compileSdk = 36
-    defaultConfig { applicationId = "com.catcore.ctrlmietze.multitask"; minSdk = 28; targetSdk = 36; versionCode = 1; versionName = "0.1.0" }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    defaultConfig {
+        applicationId = "com.catcore.ctrlmietze.multitask"
+        minSdk = 28
+        targetSdk = 36
+        versionCode = 15001
+        versionName = "1.5.0.1"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 }
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
@@ -13,7 +22,6 @@ dependencies {
         isTransitive = false
     }
 }
-
 
 configurations.configureEach {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
