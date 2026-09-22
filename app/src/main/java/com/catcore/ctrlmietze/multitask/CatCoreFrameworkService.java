@@ -143,7 +143,7 @@ public final class CatCoreFrameworkService extends Service {
     }
 
     private Notification buildNotification(String detail) {
-        Intent open = new Intent(this, MainActivity.class)
+        Intent open = new Intent(this, FrameworkViewerActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pending = PendingIntent.getActivity(
                 this,
