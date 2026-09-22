@@ -1,0 +1,6 @@
+id=catcore_multitask_root
+name=CatCore MultiTask Root Helper
+version=2.0.0-dev1
+versionCode=20000
+author=CatCore / ctrl-mietze
+description=Optional systemless root broker for CatCore MultiTask V2 task sessions, process telemetry and temporary session priority.
