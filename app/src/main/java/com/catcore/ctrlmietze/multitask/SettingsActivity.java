@@ -25,6 +25,7 @@ public final class SettingsActivity extends AppCompatActivity {
     private LinearLayout root;
     private final Handler debounce = new Handler(Looper.getMainLooper());
     private Runnable runtimeApply;
+    private boolean firstResume = true;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -36,6 +37,12 @@ public final class SettingsActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // onCreate already built the screen; do not synchronously rebuild it a second
+        // time during the same open animation.
+        if (firstResume) {
+            firstResume = false;
+            return;
+        }
         if (root != null) build();
     }
 
