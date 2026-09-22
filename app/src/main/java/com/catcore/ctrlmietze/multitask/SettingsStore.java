@@ -36,6 +36,7 @@ public final class SettingsStore {
     private static final String K_ROOT_TELEMETRY = "root_telemetry";
     private static final String K_AUTO_TRIM = "auto_trim";
     private static final String K_DEV_ACCEPTED = "developer_warning_accepted";
+    private static final String K_RESTORE_WINDOWS = "restore_windows";
 
     private SettingsStore() {}
 
@@ -62,6 +63,7 @@ public final class SettingsStore {
     public static boolean rootTelemetry(Context c) { return p(c).getBoolean(K_ROOT_TELEMETRY, true); }
     public static boolean autoTrim(Context c) { return p(c).getBoolean(K_AUTO_TRIM, false); }
     public static boolean developerWarningAccepted(Context c) { return p(c).getBoolean(K_DEV_ACCEPTED, false); }
+    public static boolean restoreWindows(Context c) { return p(c).getBoolean(K_RESTORE_WINDOWS, true); }
 
     public static void setCompatibilityMode(Context c, boolean value) { put(c, K_COMPAT, value); }
     public static void setMaxStability(Context c, boolean value) { put(c, K_STABILITY, value); }
@@ -75,6 +77,7 @@ public final class SettingsStore {
     public static void setRootTelemetry(Context c, boolean value) { put(c, K_ROOT_TELEMETRY, value); }
     public static void setAutoTrim(Context c, boolean value) { put(c, K_AUTO_TRIM, value); }
     public static void setDeveloperWarningAccepted(Context c, boolean value) { put(c, K_DEV_ACCEPTED, value); }
+    public static void setRestoreWindows(Context c, boolean value) { put(c, K_RESTORE_WINDOWS, value); }
 
     public static void setStartMode(Context c, int mode) {
         p(c).edit().putInt(K_START_MODE,
