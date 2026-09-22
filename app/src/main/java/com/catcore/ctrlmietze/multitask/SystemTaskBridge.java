@@ -54,6 +54,7 @@ public final class SystemTaskBridge {
                 .putExtra("package", packageName)
                 .putExtra("activity", activityName == null ? "" : activityName)
                 .putExtra("desired", target)
+                .putExtra("user_id", android.os.UserHandle.myUserId())
                 .putExtra("result", receiver)
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
 
