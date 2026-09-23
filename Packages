@@ -1,3 +1,17 @@
+Package: cathook-repo
+Version: 1.0.0
+Architecture: all
+Maintainer: Raphael
+Depends: ca-certificates
+Filename: ./cathook-repo_1.0.0_all.deb
+Size: 1564
+MD5sum: 9c2ba79a4bb954d24c551989b8ae1834
+SHA1: 21a5c91c92e6ca2a6d12f86872977637f408a86e
+SHA256: 533d2539961b88da8e66bee89a7060d8a5685bfbe94b120c501ca2ba84b8b754
+Description: CatHook Termux package repository bootstrap
+ Installs the CatHook APT source into Termux so CatHook packages can be
+ installed and updated normally with pkg/apt.
+
 Package: termux-android-bridge
 Version: 0.2.0
 Architecture: all

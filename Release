@@ -6,6 +6,8 @@ Architectures: all aarch64
 Components: main
 Description: Raphael's Termux package channel for CatHook/Android bridge tools
 MD5Sum:
- 3b99d7a064d4d3ee05346a4b96c049e6              581 Packages
+ 6d50adbe2f402c88b42a12897b53e6f6             1068 Packages
+ d290cfdfb1062cc22379297b695bc152              632 Packages.gz
 SHA256:
- 160faa5403ec9fcc66e44eefecb59577aba5e48f85f79e3d47390ac8b7d795b5              581 Packages
+ e8801d399018775478ad79e5ca68284b81f9e3c261d3993e562415078c874348             1068 Packages
+ 3b13188f88043145920f3e41f652f1e93a316fa8f04bb572e547cb0dcc3ed7ca              632 Packages.gz
