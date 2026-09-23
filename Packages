@@ -13,15 +13,15 @@ Description: CatHook Termux package repository bootstrap
  installed and updated normally with pkg/apt.
 
 Package: termux-android-bridge
-Version: 0.3.1
+Version: 0.3.2
 Architecture: all
 Maintainer: Raphael
 Depends: nodejs-lts, ca-certificates, coreutils
-Filename: ./termux-android-bridge_0.3.1_all.deb
-Size: 5792
-MD5sum: 6bae8f267a275818d5e7a1fef8812996
-SHA1: 307ef868a83aa99db6069e06af28d1fff03fefc7
-SHA256: 4f3dea8f98ddd5b035cb58a5511dd2c2328b7d22664c00212cc201960a76da63
+Filename: ./termux-android-bridge_0.3.2_all.deb
+Size: 5848
+MD5sum: 88c0acdfc3c5e389a5cb6d03398d30d0
+SHA1: cc25954ba98b705b7a45d43883be55afeea02aa8
+SHA256: fe9f22e749e1ca0db9786eb79eef98b742e92ae265130fc7f95f76cc473c005a
 Section: utils
 Priority: optional
 Description: Persistent Termux remote bridge client for ChatGPT MCP relay
