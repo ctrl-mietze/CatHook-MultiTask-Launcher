@@ -1,0 +1,14 @@
+Package: termux-android-bridge
+Version: 0.2.0
+Architecture: all
+Maintainer: Raphael
+Depends: nodejs-lts, curl, jq, unzip, coreutils, ca-certificates
+Filename: ./termux-android-bridge_0.2.0_all.deb
+Size: 9104
+MD5sum: 0584e22d141faca30ba816f51ba9011f
+SHA1: 6b71d568501a1d786defadecc4cc7326084357bf
+SHA256: c33e13f01d54fbe87ebfeb3ebf2980f00dd4a3e5885555932419c1292b4ad840
+Description: Termux Android MCP Bridge with OpenAI Secure Tunnel helper
+ Installs the MCP bridge as a real Termux package under $PREFIX,
+ with commands for setup, start, status, audit handling and tunnel setup.
+
