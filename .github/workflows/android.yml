@@ -51,12 +51,12 @@ jobs:
           test -n "$CATHOOK_KEY_ALIAS"
           test -n "$CATHOOK_KEY_PASSWORD"
           gradle --no-daemon :app:assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk CatCore-MultiTask-V2-dev8-signed.apk
+          cp app/build/outputs/apk/release/app-release.apk CatCore-MultiTask-V2-release-signed.apk
 
       - name: Verify APK contract and permanent signature
         run: |
           set -euo pipefail
-          APK="CatCore-MultiTask-V2-dev8-signed.apk"
+          APK="CatCore-MultiTask-V2-release-signed.apk"
 
           test -f "$APK"
 
@@ -66,8 +66,8 @@ jobs:
           test -n "$APKSIGNER"
 
           test "$("$APKANALYZER" manifest application-id "$APK")" = "com.catcore.ctrlmietze.multitask"
-          test "$("$APKANALYZER" manifest version-code "$APK")" = "20007"
-          test "$("$APKANALYZER" manifest version-name "$APK")" = "2.0.0.0-dev8"
+          test "$("$APKANALYZER" manifest version-code "$APK")" = "20008"
+          test "$("$APKANALYZER" manifest version-name "$APK")" = "2.0.0.0"
           test "$("$APKANALYZER" manifest min-sdk "$APK")" = "28"
           test "$("$APKANALYZER" manifest target-sdk "$APK")" = "36"
 
@@ -80,4 +80,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: CatCore-MultiTask-V2-signed
-          path: CatCore-MultiTask-V2-dev8-signed.apk
+          path: CatCore-MultiTask-V2-release-signed.apk
