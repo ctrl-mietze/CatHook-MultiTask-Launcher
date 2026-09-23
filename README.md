@@ -16,36 +16,36 @@
 
 MultiTask is an Android multi-task launcher with LSPosed System Framework reinforcement, optional root-assisted launching and a learned fallback pipeline. It resolves more than one possible launcher activity, remembers which method works for each package and only uses slower compatibility checks when requested.
 
-## ✨ V1.5.0.1
+## ✨ V2.0.0.0
 
-- **Smarter app launcher** – resolves launcher aliases and multiple candidate activities instead of trusting one stored MainActivity.
-- **Current-user aware** – no hard-coded Android user 0.
-- **Learned launch strategy** – the first successful start path is cached per app for faster later launches.
-- **Compatibility Mode** – briefly analyzes a problematic app and expands the fallback chain.
-- **Max Stability** – enables the widest launch fallback chain.
-- **Task Manager** – View All / View MultiTask, inspect running user-app tasks and open 1–8 tasks.
-- **Close all MultiTask** – collapses duplicate-task apps back to one reopened instance.
-- **Runtime settings** – optional cached/phantom process tuning through Android `device_config`, restorable after boot.
-- **LSPosed System Framework scope** – MultiTask-marked launches receive task flags centrally without selecting every target app.
-- **Optional per-app quick button** – add a specific target app to the LSPosed scope only when you want the in-app `Ⅱ` shortcut.
+V2 is the CatCore generation of MultiTask: two separate launch models, a MultiTask-owned Workspace, an LSPosed-native Android task bridge, a dedicated `:framework` process, live Task Manager and compatibility tooling.
 
-## ▶ Start an app
+- **Start as my task** — CatCore Workspace + VirtualDisplay windows.
+- **Start as app's own task** — verified real Android task targets through the System Framework bridge.
+- **Task Manager + Manage Activity** — inspect tasks and move into deeper Workspace management.
+- **CatCore Framework** — app catalog, session state, Framework Viewer, Stability Guard and Stability Guard+.
+- **Compatibility first** — Full Scan profiles, bounded fallbacks and framework-managed process defaults.
+- **Optional Root Module** — explicit systemless root-backed fallback and telemetry controls.
+- **Legacy / Easy Mode** — classic app-first workflow using the current V2 backend.
+- **UI Created UI (idk i like it)** — complete CatCore visual redesign with custom dialogs and animated screens.
 
-There is no separate “Quick Start” flow anymore.
+## ▶ How to start
 
-1. Open **MultiTask**.
-2. Find the app you want.
-3. Tap the **▶ Play button** next to it.
-4. If an app fails, MultiTask shows the reason and offers **Open settings**.
-5. Enable **Compatibility Mode** only for apps that need it; use **Max Stability** as the final fallback.
+The README stays short on purpose. The setup and start methods each have their own guide:
+
+- **[How to start](docs/tutorials/START_HERE.md)**
+- **[Start as my task](docs/tutorials/START_AS_MY_TASK.md)**
+- **[Start as app's own task](docs/tutorials/START_AS_APP_OWN_TASK.md)**
+- **[Optional Root Module](docs/tutorials/ROOT_MODULE.md)**
+- **[Legacy / Easy Mode](docs/tutorials/LEGACY_EASY_MODE.md)**
 
 ## 🧩 LSPosed setup
 
-Enable the module and keep **MultiTask + System Framework** in its scope. Normal launcher use does **not** require selecting every app individually.
+Enable the integrated MultiTask module and keep **MultiTask + System Framework** in scope. A userspace/soft reboot is recommended whenever the already-running System Framework needs to load a changed hook implementation.
 
-Select a specific target app only if you want MultiTask's optional in-app quick button. SystemUI is not required for launching.
+Normal target apps do not need to be selected just to use the V2 system task bridge.
 
-> Android still has the final say over task creation. Apps declaring modes such as `singleTask`, `singleInstance` or `documentLaunchMode="never"` can force task reuse.
+> Android still has final authority over activity/task behavior. Restrictive launch modes, secure surfaces and OEM behavior can limit duplicate tasks or VirtualDisplay hosting.
 
 ## 🛠️ Build
 
@@ -69,7 +69,7 @@ chmod +x build-termux.sh
 | Property | Value |
 |---|---|
 | Package | `com.catcore.ctrlmietze.multitask` |
-| Version | `1.5.0.1` (`versionCode 15001`) |
+| Version | `2.0.0.0` (`versionCode 20008`) |
 | Android | 9–16 / API 28–36 |
 | Language | Java 17 |
 | Xposed API | 82 |

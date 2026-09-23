@@ -37,6 +37,18 @@ public final class RuntimeTuning {
     public static Result applyBlocking(Context context, boolean resetDefaults) {
         int cached = SettingsStore.maxCachedProcesses(context);
         int phantom = SettingsStore.maxPhantomProcesses(context);
+        int background = SettingsStore.backgroundProcessLimit(context);
+        int emptyPercent = SettingsStore.emptyProcessPercent(context);
+        boolean manual = SettingsStore.manualProcessTuning(context);
+
+        if (!manual) {
+            // Framework-managed mode: remove only CatCore's runtime overrides.
+            RootShell.run("device_config delete activity_manager max_cached_processes", 5);
+            RootShell.run("device_config delete activity_manager max_phantom_processes", 5);
+            RootShell.run("device_config delete activity_manager max_empty_time_millis", 5);
+            RootShell.run("settings delete global activity_manager_constants", 5);
+            return new Result(true, "Process runtime is managed by CatCore Framework.");
+        }
 
         StringBuilder message = new StringBuilder();
         boolean ok = true;
@@ -67,6 +79,22 @@ public final class RuntimeTuning {
             message.append("Phantom processes: system default");
         } else {
             message.append("Phantom processes: system default");
+        }
+
+        if (background > 0) {
+            RootShell.Result r = RootShell.run(
+                    "settings put global activity_manager_constants max_cached_processes="
+                            + background, 5);
+            ok &= r.ok;
+            message.append('\n').append("Background process target: ")
+                    .append(r.ok ? background : RootShell.shortReason(r));
+        }
+
+        if (emptyPercent > 0) {
+            // Exposed as a CatCore policy value. OEM ActivityManager implementations differ,
+            // so the framework consumes this value conservatively instead of patching files.
+            message.append('\n').append("Empty-process reserve: ")
+                    .append(emptyPercent).append("% (framework policy)");
         }
 
         return new Result(ok, message.toString().trim());

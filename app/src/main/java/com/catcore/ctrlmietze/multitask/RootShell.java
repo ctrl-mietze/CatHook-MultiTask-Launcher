@@ -30,7 +30,7 @@ public final class RootShell {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (out.length() < 12000) out.append(line).append('\n');
+                    if (out.length() < 100000) out.append(line).append('\n');
                 }
             }
 

@@ -1,0 +1,6 @@
+id=catcore_multitask_root
+name=CatCore MultiTask Optional Root Module
+version=2.0.0
+versionCode=20008
+author=CatCore / ctrl-mietze
+description=Optional systemless root module for CatCore MultiTask V2 root ActivityManager task creation, fallback sessions, telemetry and temporary session priority. Zygisk is detected when present but is not required.

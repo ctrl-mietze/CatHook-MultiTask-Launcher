@@ -1,169 +1,217 @@
 package com.catcore.ctrlmietze.multitask;
 
-import android.app.AlertDialog;
+import android.app.ActivityManager;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
-import java.text.Collator;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
-    private TextView statusTitle;
-    private TextView statusHint;
-    private View statusDot;
-    private AlertDialog compatibilityDialog;
-    private TextView compatibilityText;
+    private TextView frameworkStatus;
+    private TextView taskManagerSummary;
+    private final ExecutorService dashboardExec = Executors.newSingleThreadExecutor();
+    private volatile boolean rootReady;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
 
-        List<AppEntry> apps = loadApps();
+        if (!SettingsStore.onboardingComplete(this)) {
+            startActivity(new Intent(this, FirstStartActivity.class));
+            finish();
+            return;
+        }
+
+        if (SettingsStore.legacyEasyMode(this)) {
+            startActivity(new Intent(this, LegacyHomeActivity.class));
+            finish();
+            return;
+        }
+
+        CatUi.applyWindow(this);
+        if (SettingsStore.frameworkEnabled(this)) {
+            try { CatCoreFrameworkService.start(this); } catch (Throwable ignored) {}
+        }
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(16), dp(18), 0);
-        root.setBackgroundColor(Color.rgb(10, 12, 17));
+        root.setPadding(dp(16), dp(30), dp(16), dp(18));
+        root.setBackground(CatUi.background());
 
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(header, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout hero = CatUi.card(this);
+        hero.setBackground(CatUi.hero(this));
+        hero.setPadding(dp(18), dp(18), dp(18), dp(16));
+        root.addView(hero, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout headerText = new LinearLayout(this);
-        headerText.setOrientation(LinearLayout.VERTICAL);
-        header.addView(headerText, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout heroTop = new LinearLayout(this);
+        heroTop.setGravity(Gravity.CENTER_VERTICAL);
+        hero.addView(heroTop);
 
-        TextView title = text("MultiTask", 30, Color.WHITE, true);
-        headerText.addView(title);
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        heroTop.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
 
-        TextView subtitle = text("Open another task without cloning the app.", 13,
-                Color.rgb(160, 171, 192), false);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
-        subtitleParams.topMargin = dp(2);
-        headerText.addView(subtitle, subtitleParams);
+        TextView kicker = CatUi.text(this, "CATCORE", 11, Color.rgb(165, 177, 255), true);
+        kicker.setLetterSpacing(0.12f);
+        brand.addView(kicker);
+        brand.addView(CatUi.text(this, "CatCore MultiTask", 29, CatUi.TEXT, true));
 
-        Button settings = button("⚙");
-        settings.setContentDescription("Settings");
-        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(dp(48), dp(48));
-        header.addView(settings, settingsParams);
+        TextView subtitle = CatUi.text(this,
+                "Independent task sessions, framework windows and per-app launch rules.",
+                12, Color.rgb(205, 213, 235), false);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
+        sp.topMargin = dp(5);
+        brand.addView(subtitle, sp);
+
+        TextView version = CatUi.pill(this, "V2 DEV8", Color.rgb(56, 65, 128));
+        heroTop.addView(version, new LinearLayout.LayoutParams(dp(82), dp(34)));
+
+        rootReady = EnvironmentProbe.hasRoot();
+        boolean xposedReady = isXposedActive();
+        boolean systemHookReady = EnvironmentProbe.isSystemHookActive(this);
+
+        LinearLayout statusGrid = new LinearLayout(this);
+        statusGrid.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams sgp = new LinearLayout.LayoutParams(-1, -2);
+        sgp.topMargin = dp(14);
+        hero.addView(statusGrid, sgp);
+
+        LinearLayout statusTop = new LinearLayout(this);
+        statusTop.setGravity(Gravity.CENTER_VERTICAL);
+        statusGrid.addView(statusTop, new LinearLayout.LayoutParams(-1, dp(32)));
+        statusTop.addView(statusPill(
+                rootReady ? "ROOT READY" : "ROOT MISSING",
+                rootReady ? CatUi.GOOD : CatUi.BAD));
+        statusTop.addView(statusPill(
+                xposedReady ? "LSPOSED ACTIVE" : "LSPOSED OFF",
+                xposedReady ? CatUi.GOOD : CatUi.BAD));
+
+        LinearLayout statusBottom = new LinearLayout(this);
+        statusBottom.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(-1, dp(32));
+        sbp.topMargin = dp(6);
+        statusGrid.addView(statusBottom, sbp);
+        statusBottom.addView(statusPill(
+                systemHookReady ? "SYSTEM HOOK" : "HOOK OFF",
+                systemHookReady ? CatUi.GOOD : CatUi.WARN));
+
+        frameworkStatus = statusPill(
+                isFrameworkRunning() ? "FRAMEWORK" : "FRAMEWORK OFF",
+                isFrameworkRunning() ? CatUi.GOOD : CatUi.WARN);
+        statusBottom.addView(frameworkStatus);
+
+        // Task Manager now lives inside the CatCore header instead of consuming
+        // another full dashboard card on Home.
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.rgb(73, 79, 125));
+        LinearLayout.LayoutParams dpv = new LinearLayout.LayoutParams(-1, dp(1));
+        dpv.topMargin = dp(14);
+        hero.addView(divider, dpv);
+
+        LinearLayout taskRow = new LinearLayout(this);
+        taskRow.setGravity(Gravity.CENTER_VERTICAL);
+        taskRow.setPadding(0, dp(12), 0, 0);
+        hero.addView(taskRow, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout taskText = new LinearLayout(this);
+        taskText.setOrientation(LinearLayout.VERTICAL);
+        taskRow.addView(taskText, new LinearLayout.LayoutParams(0, -2, 1));
+
+        TextView taskKicker = CatUi.text(this, "LIVE CONTROL · TASK MANAGER",
+                9, Color.rgb(159, 176, 255), true);
+        taskKicker.setLetterSpacing(0.08f);
+        taskText.addView(taskKicker);
+
+        taskManagerSummary = CatUi.text(
+                this, "Reading running tasks…", 12, Color.rgb(214, 220, 241), false);
+        LinearLayout.LayoutParams tsp = new LinearLayout.LayoutParams(-1, -2);
+        tsp.topMargin = dp(4);
+        taskText.addView(taskManagerSummary, tsp);
+
+        TextView openTaskManager = CatUi.pill(this, "OPEN", Color.rgb(42, 104, 83));
+        openTaskManager.setContentDescription("Open Task Manager");
+        taskRow.addView(openTaskManager, new LinearLayout.LayoutParams(dp(68), dp(34)));
+
+        View.OnClickListener taskOpen = v ->
+                startActivity(new Intent(this, TaskManagerActivity.class));
+        taskRow.setOnClickListener(taskOpen);
+        openTaskManager.setOnClickListener(taskOpen);
+        CatUi.pressScale(taskRow);
+
+        LinearLayout modeCard = CatUi.card(this);
+        LinearLayout.LayoutParams mcp = CatUi.cardParams(this);
+        mcp.topMargin = dp(12);
+        root.addView(modeCard, mcp);
+
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setGravity(Gravity.CENTER_VERTICAL);
+        modeCard.addView(modeRow);
+
+        LinearLayout modeText = new LinearLayout(this);
+        modeText.setOrientation(LinearLayout.VERTICAL);
+        modeRow.addView(modeText, new LinearLayout.LayoutParams(0, -2, 1));
+
+        boolean mine = SettingsStore.startMode(this) == SettingsStore.MODE_MY_TASK;
+        modeText.addView(CatUi.text(this,
+                mine ? "Start as my task" : "Start as app's own task",
+                16, CatUi.TEXT, true));
+        modeText.addView(CatUi.text(this,
+                mine ? "MultiTask-owned V2 session" : "LSPosed native system task bridge",
+                12, CatUi.MUTED, false));
+
+        TextView modePill = CatUi.pill(this, "CHANGE", Color.rgb(51, 61, 86));
+        modeRow.addView(modePill, new LinearLayout.LayoutParams(dp(76), dp(34)));
+        modeCard.setOnClickListener(v -> showModeSelector());
+        CatUi.pressScale(modeCard);
+
+        LinearLayout appStarter = CatUi.card(this);
+        LinearLayout.LayoutParams asp = CatUi.cardParams(this);
+        asp.topMargin = dp(10);
+        root.addView(appStarter, asp);
+
+        LinearLayout appRow = new LinearLayout(this);
+        appRow.setGravity(Gravity.CENTER_VERTICAL);
+        appStarter.addView(appRow);
+
+        LinearLayout appText = new LinearLayout(this);
+        appText.setOrientation(LinearLayout.VERTICAL);
+        appRow.addView(appText, new LinearLayout.LayoutParams(0, -2, 1));
+        appText.addView(CatUi.text(this, "App Starter", 17, CatUi.TEXT, true));
+        appText.addView(CatUi.text(this,
+                "Apps · search · exact task count · start",
+                12, CatUi.MUTED, false));
+
+        TextView appOpen = CatUi.pill(this, "OPEN", Color.rgb(55, 67, 112));
+        appRow.addView(appOpen, new LinearLayout.LayoutParams(dp(68), dp(34)));
+
+        View.OnClickListener starterOpen = v ->
+                startActivity(new Intent(this, AppStarterActivity.class));
+        appStarter.setOnClickListener(starterOpen);
+        appOpen.setOnClickListener(starterOpen);
+        CatUi.pressScale(appStarter);
+
+        Button settings = CatUi.secondaryButton(this, "Settings");
+        LinearLayout.LayoutParams setp = new LinearLayout.LayoutParams(-1, dp(52));
+        setp.topMargin = dp(10);
+        root.addView(settings, setp);
         settings.setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
-        actionsParams.topMargin = dp(16);
-        root.addView(actions, actionsParams);
-
-        Button taskManager = button("Task Manager");
-        LinearLayout.LayoutParams managerParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        actions.addView(taskManager, managerParams);
-        taskManager.setOnClickListener(v -> {
-            if (!isXposedActive()) {
-                showXposedRequired();
-                return;
-            }
-            startActivity(new Intent(this, TaskManagerActivity.class));
-        });
-
-        Button quickSettings = button("Settings");
-        LinearLayout.LayoutParams quickParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        quickParams.leftMargin = dp(10);
-        actions.addView(quickSettings, quickParams);
-        quickSettings.setOnClickListener(v ->
-                startActivity(new Intent(this, SettingsActivity.class)));
-
-        LinearLayout status = new LinearLayout(this);
-        status.setGravity(Gravity.CENTER_VERTICAL);
-        status.setPadding(dp(15), dp(14), dp(15), dp(14));
-        status.setBackground(shape(Color.rgb(21, 25, 34), dp(18)));
-        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(-1, -2);
-        statusParams.topMargin = dp(14);
-        root.addView(status, statusParams);
-
-        statusDot = new View(this);
-        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(10), dp(10));
-        dotParams.rightMargin = dp(12);
-        status.addView(statusDot, dotParams);
-
-        LinearLayout statusTexts = new LinearLayout(this);
-        statusTexts.setOrientation(LinearLayout.VERTICAL);
-        status.addView(statusTexts, new LinearLayout.LayoutParams(0, -2, 1));
-
-        statusTitle = text("", 15, Color.WHITE, true);
-        statusTexts.addView(statusTitle);
-
-        statusHint = text("", 12, Color.rgb(151, 164, 188), false);
-        LinearLayout.LayoutParams statusHintParams = new LinearLayout.LayoutParams(-1, -2);
-        statusHintParams.topMargin = dp(3);
-        statusTexts.addView(statusHint, statusHintParams);
-        updateXposedStatus();
-
-        LinearLayout searchRow = new LinearLayout(this);
-        searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams searchRowParams = new LinearLayout.LayoutParams(-1, -2);
-        searchRowParams.topMargin = dp(18);
-        root.addView(searchRow, searchRowParams);
-
-        TextView appHeading = text("Apps", 18, Color.WHITE, true);
-        searchRow.addView(appHeading, new LinearLayout.LayoutParams(0, -2, 1));
-
-        TextView count = text(String.valueOf(apps.size()), 13,
-                Color.rgb(142, 156, 183), true);
-        count.setGravity(Gravity.CENTER);
-        count.setBackground(shape(Color.rgb(29, 35, 49), dp(12)));
-        searchRow.addView(count, new LinearLayout.LayoutParams(dp(48), dp(30)));
-
-        EditText search = new EditText(this);
-        search.setSingleLine(true);
-        search.setHint("Search apps or packages");
-        search.setTextColor(Color.WHITE);
-        search.setHintTextColor(Color.rgb(128, 141, 166));
-        search.setTextSize(14);
-        search.setPadding(dp(15), 0, dp(15), 0);
-        search.setBackground(shape(Color.rgb(27, 32, 44), dp(15)));
-        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(-1, dp(50));
-        searchParams.topMargin = dp(10);
-        searchParams.bottomMargin = dp(6);
-        root.addView(search, searchParams);
-
-        RecyclerView list = new RecyclerView(this);
-        list.setLayoutManager(new LinearLayoutManager(this));
-        list.setClipToPadding(false);
-        list.setPadding(0, 0, 0, dp(16));
-        root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
-
         setContentView(root);
-
-        AppAdapter adapter = new AppAdapter(this, apps);
-        list.setAdapter(adapter);
-        search.addTextChangedListener(new android.text.TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                adapter.filter(s == null ? "" : s.toString());
-            }
-            public void afterTextChanged(android.text.Editable editable) {}
-        });
+        refreshTaskManagerSummary();
 
         if (SettingsStore.restoreRuntime(this)) {
             RuntimeTuning.applyAsync(this, null);
@@ -173,141 +221,127 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (statusTitle != null) updateXposedStatus();
+
+        if (frameworkStatus != null) {
+            boolean running = isFrameworkRunning();
+            frameworkStatus.setText(running ? "FRAMEWORK" : "FRAMEWORK OFF");
+            frameworkStatus.setBackground(CatUi.shape(
+                    this,
+                    running ? Color.rgb(29, 78, 62) : Color.rgb(88, 67, 28),
+                    999));
+        }
+
+        if (!dashboardExec.isShutdown()) {
+            dashboardExec.execute(() -> rootReady = EnvironmentProbe.hasRoot());
+        }
+        refreshTaskManagerSummary();
+    }
+
+    @Override
+    protected void onDestroy() {
+        dashboardExec.shutdownNow();
+        super.onDestroy();
     }
 
     public boolean isXposedActive() {
+        return EnvironmentProbe.isXposedActive();
+    }
+
+    private void refreshTaskManagerSummary() {
+        if (taskManagerSummary == null || dashboardExec.isShutdown()) return;
+
+        dashboardExec.execute(() -> {
+            List<TaskInspector.TaskInfo> tasks;
+            try {
+                tasks = TaskInspector.readUserTasks(this);
+            } catch (Throwable t) {
+                tasks = new ArrayList<>();
+            }
+
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            long ram = 0L;
+            Map<String, Long> ramByPackage = new LinkedHashMap<>();
+
+            for (TaskInspector.TaskInfo task : tasks) {
+                counts.put(task.packageName,
+                        counts.getOrDefault(task.packageName, 0) + 1);
+                Long known = ramByPackage.get(task.packageName);
+                if (known == null || task.rssBytes > known) {
+                    ramByPackage.put(task.packageName, task.rssBytes);
+                }
+            }
+
+            for (Long value : ramByPackage.values()) {
+                if (value != null) ram += value;
+            }
+
+            int multi = 0;
+            for (Integer count : counts.values()) {
+                if (count != null && count > 1) multi++;
+            }
+
+            final int appCount = counts.size();
+            final int taskCount = tasks.size();
+            final int multiCount = multi;
+            final long ramBytes = ram;
+
+            runOnUiThread(() -> {
+                if (taskManagerSummary == null) return;
+                taskManagerSummary.setText(
+                        appCount + " apps · "
+                                + taskCount + " tasks · "
+                                + multiCount + " MultiTask · "
+                                + formatRamShort(ramBytes));
+            });
+        });
+    }
+
+    private static String formatRamShort(long bytes) {
+        if (bytes <= 0L) return "RAM --";
+        double mib = bytes / 1048576d;
+        if (mib >= 1024d) {
+            return String.format(java.util.Locale.US, "%.1f GB RAM", mib / 1024d);
+        }
+        return String.format(java.util.Locale.US, "%.0f MB RAM", mib);
+    }
+
+    private TextView statusPill(String value, int color) {
+        int bg = Color.rgb(
+                Math.max(20, Color.red(color) / 3),
+                Math.max(20, Color.green(color) / 3),
+                Math.max(20, Color.blue(color) / 3));
+        TextView pill = CatUi.pill(this, value, bg);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(30), 1);
+        p.rightMargin = dp(5);
+        pill.setLayoutParams(p);
+        pill.setTextSize(9);
+        return pill;
+    }
+
+    private void showModeSelector() {
+        final String[] modes = {"Start as my task", "Start as app's own task"};
+        int current = SettingsStore.startMode(this) == SettingsStore.MODE_APP_OWN_TASK ? 1 : 0;
+        CatDialog.selector(this, "Main start method", modes, current, which -> {
+            SettingsStore.setStartMode(this,
+                    which == 1 ? SettingsStore.MODE_APP_OWN_TASK : SettingsStore.MODE_MY_TASK);
+            recreate();
+        });
+    }
+
+    private boolean isFrameworkRunning() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            if (am == null) return false;
+            String wanted = getPackageName() + ":framework";
+            for (ActivityManager.RunningAppProcessInfo info : am.getRunningAppProcesses()) {
+                if (wanted.equals(info.processName)) return true;
+            }
+        } catch (Throwable ignored) {
+        }
         return false;
     }
 
-    public void showXposedRequired() {
-        new AlertDialog.Builder(this)
-                .setTitle("LSPosed required")
-                .setMessage("Enable MultiTask in LSPosed and keep MultiTask + System Framework in its scope. "
-                        + "You do not need to select every target app.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Open settings", (d, w) ->
-                        startActivity(new Intent(this, SettingsActivity.class)))
-                .show();
-    }
-
-    public void showCompatibilityProgress(String message) {
-        if (compatibilityDialog == null) {
-            LinearLayout box = new LinearLayout(this);
-            box.setOrientation(LinearLayout.HORIZONTAL);
-            box.setGravity(Gravity.CENTER_VERTICAL);
-            box.setPadding(dp(20), dp(14), dp(20), dp(14));
-
-            ProgressBar progress = new ProgressBar(this);
-            box.addView(progress, new LinearLayout.LayoutParams(dp(32), dp(32)));
-
-            compatibilityText = text(message, 13, Color.WHITE, false);
-            LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, -2, 1);
-            textParams.leftMargin = dp(14);
-            box.addView(compatibilityText, textParams);
-
-            compatibilityDialog = new AlertDialog.Builder(this)
-                    .setTitle("Compatibility check")
-                    .setView(box)
-                    .setCancelable(false)
-                    .create();
-            compatibilityDialog.show();
-        } else if (compatibilityText != null) {
-            compatibilityText.setText(message);
-        }
-    }
-
-    public void hideCompatibilityProgress() {
-        if (compatibilityDialog != null) {
-            compatibilityDialog.dismiss();
-            compatibilityDialog = null;
-            compatibilityText = null;
-        }
-    }
-
-    public void showLaunchFailure(String appName, String message) {
-        hideCompatibilityProgress();
-        new AlertDialog.Builder(this)
-                .setTitle("Couldn’t open " + appName)
-                .setMessage(message)
-                .setNegativeButton("Close", null)
-                .setPositiveButton("Open settings", (d, w) ->
-                        startActivity(new Intent(this, SettingsActivity.class)))
-                .show();
-    }
-
-    private void updateXposedStatus() {
-        boolean active = isXposedActive();
-        statusDot.setBackground(shape(
-                active ? Color.rgb(52, 211, 153) : Color.rgb(244, 105, 117), dp(6)));
-        statusTitle.setText(active ? "LSPosed connected" : "LSPosed is not active");
-        statusHint.setText(active
-                ? "Ready. MultiTask will learn the fastest working start method per app."
-                : "Enable the module first. Recommended scope: MultiTask + System Framework.");
-    }
-
-    private List<AppEntry> loadApps() {
-        PackageManager pm = getPackageManager();
-        Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-        Map<String, AppEntry> unique = new LinkedHashMap<>();
-
-        for (ResolveInfo info : pm.queryIntentActivities(query, PackageManager.MATCH_ALL)) {
-            if (info.activityInfo == null) continue;
-            ApplicationInfo ai = info.activityInfo.applicationInfo;
-            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
-            if (getPackageName().equals(ai.packageName)) continue;
-
-            String activity = info.activityInfo.name;
-            try {
-                Intent launch = pm.getLaunchIntentForPackage(ai.packageName);
-                if (launch != null && launch.getComponent() != null) {
-                    activity = launch.getComponent().getClassName();
-                }
-            } catch (Throwable ignored) {}
-
-            CharSequence label = info.loadLabel(pm);
-            AppEntry entry = new AppEntry(
-                    label == null ? ai.packageName : label.toString(),
-                    ai.packageName,
-                    activity,
-                    info.loadIcon(pm));
-            unique.putIfAbsent(ai.packageName, entry);
-        }
-
-        ArrayList<AppEntry> out = new ArrayList<>(unique.values());
-        Collator collator = Collator.getInstance();
-        out.sort((a, b) -> collator.compare(a.label, b.label));
-        return out;
-    }
-
-    private Button button(String label) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
-        b.setTextSize(14);
-        b.setGravity(Gravity.CENTER);
-        b.setBackground(shape(Color.rgb(76, 105, 229), dp(14)));
-        return b;
-    }
-
-    private TextView text(String value, int sp, int color, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(value);
-        t.setTextSize(sp);
-        t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
-    }
-
-    private GradientDrawable shape(int color, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
     private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        return CatUi.dp(this, value);
     }
 }

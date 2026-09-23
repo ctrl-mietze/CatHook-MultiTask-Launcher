@@ -22,6 +22,8 @@ public final class TaskLauncher {
             "com.catcore.ctrlmietze.multitask.FORCE_MULTITASK";
     public static final String EXTRA_MAX_STABILITY =
             "com.catcore.ctrlmietze.multitask.MAX_STABILITY";
+    public static final String EXTRA_RULE_SPAWN =
+            "com.catcore.ctrlmietze.multitask.RULE_SPAWN";
 
     public interface Callback {
         void onResult(boolean ok, String message);
@@ -105,32 +107,25 @@ public final class TaskLauncher {
             String[] parts = cached.split("\\n", 2);
             String strategy = parts[0];
             String component = parts.length > 1 ? parts[1] : "";
-            progress(context, progress, "Using the known working start method…");
-            LaunchResult r = runStrategy(context, strategy, pkg, component, childTasks);
-            if (r.ok) return r;
-            reasons.add("Cached method: " + r.message);
-            cache.edit().remove(pkg).apply();
-        }
 
-        progress(context, progress, "Resolving the best launcher entry…");
-
-        LaunchResult packageFull = runStrategy(
-                context, "root_package_full", pkg, "", childTasks);
-        if (packageFull.ok) {
-            remember(cache, pkg, "root_package_full", "");
-            return packageFull;
-        }
-        reasons.add("Package launch: " + packageFull.message);
-
-        for (String component : candidates) {
-            LaunchResult r = runStrategy(
-                    context, "root_component_full", pkg, component, childTasks);
-            if (r.ok) {
-                remember(cache, pkg, "root_component_full", component);
-                return r;
+            boolean legacyAggressive = "root_package_full".equals(strategy)
+                    || "root_component_full".equals(strategy);
+            boolean privilegedCached = strategy.startsWith("root_")
+                    || "monkey".equals(strategy);
+            if (legacyAggressive
+                    || (privilegedCached
+                    && (!maxStability || !SettingsStore.rootTaskStart(context)))) {
+                cache.edit().remove(pkg).apply();
+            } else {
+                progress(context, progress, "Using the known working compatibility method…");
+                LaunchResult r = runStrategy(context, strategy, pkg, component, childTasks);
+                if (r.ok) return r;
+                reasons.add("Cached method: " + r.message);
+                cache.edit().remove(pkg).apply();
             }
-            reasons.add(component + ": " + r.message);
         }
+
+        progress(context, progress, "Trying the safe Android compatibility path…");
 
         for (String component : candidates) {
             LaunchResult r = runStrategy(
@@ -150,8 +145,25 @@ public final class TaskLauncher {
         }
         reasons.add("Android launch intent: " + directLaunch.message);
 
-        if (maxStability || compatibility) {
-            progress(context, progress, "Trying compatibility fallbacks…");
+        // Root ActivityManager strategies are intentionally NOT part of the
+        // normal V2 own-task path anymore. They are compatibility fallbacks
+        // only, after the LSPosed system_server bridge has already failed.
+        if (maxStability && SettingsStore.rootTaskStart(context)) {
+            progress(context, progress, "Trying explicit Max Stability root fallbacks…");
+
+            if (SettingsStore.rootHelperEnabled(context)
+                    && RootPluginManager.isInstalled()) {
+                int before = TaskInspector.countTasksForPackage(pkg);
+                RootPluginManager.Result helper = RootPluginManager.run("launch", pkg);
+                if (helper.ok) {
+                    LaunchResult verified = verifyNewTask(
+                            pkg, before, "Started through CatCore Root Helper.");
+                    if (verified.ok) return verified;
+                    reasons.add("Root Helper: " + verified.message);
+                } else {
+                    reasons.add("Root Helper: " + helper.message);
+                }
+            }
 
             for (String component : candidates) {
                 LaunchResult r = runStrategy(
@@ -160,25 +172,17 @@ public final class TaskLauncher {
                     remember(cache, pkg, "root_component_basic", component);
                     return r;
                 }
-                reasons.add("Basic " + component + ": " + r.message);
+                reasons.add("Root compatibility " + component + ": " + r.message);
             }
-
-            LaunchResult packageBasic = runStrategy(
-                    context, "root_package_basic", pkg, "", childTasks);
-            if (packageBasic.ok) {
-                remember(cache, pkg, "root_package_basic", "");
-                return packageBasic;
-            }
-            reasons.add("Basic package launch: " + packageBasic.message);
 
             if (maxStability) {
-                LaunchResult monkey = runStrategy(context, "monkey", pkg, "", childTasks);
-                if (monkey.ok) {
-                    remember(cache, pkg, "monkey", "");
-                    return new LaunchResult(true,
-                            "App started with the final compatibility fallback.");
+                LaunchResult packageBasic = runStrategy(
+                        context, "root_package_basic", pkg, "", childTasks);
+                if (packageBasic.ok) {
+                    remember(cache, pkg, "root_package_basic", "");
+                    return packageBasic;
                 }
-                reasons.add("Final fallback: " + monkey.message);
+                reasons.add("Root package compatibility: " + packageBasic.message);
             }
         }
 
@@ -246,6 +250,18 @@ public final class TaskLauncher {
 
     private static LaunchResult runStrategy(Context context, String strategy, String pkg,
                                             String component, boolean childTasks) {
+        int before = TaskInspector.countTasksForPackage(pkg);
+        LaunchResult raw = runStrategyRaw(context, strategy, pkg, component, childTasks);
+        if (!raw.ok) return raw;
+        return verifyNewTask(pkg, before, raw.message);
+    }
+
+    private static LaunchResult runStrategyRaw(Context context, String strategy, String pkg,
+                                               String component, boolean childTasks) {
+        if (!SettingsStore.methodEnabled(context, strategy)) {
+            return new LaunchResult(false, "Disabled in Developer Options: " + strategy);
+        }
+
         boolean maxStability = SettingsStore.maxStability(context);
         String marker = " --ez " + EXTRA_FORCE_MULTITASK + " true";
         if (maxStability) {
@@ -316,6 +332,43 @@ public final class TaskLauncher {
         }
 
         return new LaunchResult(false, "Unknown start strategy.");
+    }
+
+    private static LaunchResult verifyNewTask(
+            String pkg, int before, String successMessage) {
+        // If task inspection is unavailable on an OEM build, keep the raw launch result
+        // rather than making every launch impossible. Successful inspections are strict.
+        if (before < 0) {
+            return new LaunchResult(true,
+                    successMessage + " Task verification unavailable on this Android build.");
+        }
+
+        int after = before;
+        final long[] waits = {70L, 120L, 180L, 260L};
+        for (long wait : waits) {
+            try {
+                Thread.sleep(wait);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+
+            int observed = TaskInspector.countTasksForPackage(pkg);
+            if (observed < 0) {
+                return new LaunchResult(true,
+                        successMessage + " Task verification became unavailable.");
+            }
+            after = observed;
+            if (after > before) {
+                return new LaunchResult(true,
+                        "Started and verified as a separate task (" + before + " → " + after + ").");
+            }
+        }
+
+        return new LaunchResult(false,
+                "Android reported a successful start, but the task count did not increase "
+                        + "(" + before + " → " + after + "). "
+                        + "The existing task was probably reused.");
     }
 
     private static LaunchResult rootStart(String command) {
