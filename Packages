@@ -13,16 +13,19 @@ Description: CatHook Termux package repository bootstrap
  installed and updated normally with pkg/apt.
 
 Package: termux-android-bridge
-Version: 0.2.0
+Version: 0.3.0
 Architecture: all
 Maintainer: Raphael
-Depends: nodejs-lts, curl, jq, unzip, coreutils, ca-certificates
-Filename: ./termux-android-bridge_0.2.0_all.deb
-Size: 9104
-MD5sum: 0584e22d141faca30ba816f51ba9011f
-SHA1: 6b71d568501a1d786defadecc4cc7326084357bf
-SHA256: c33e13f01d54fbe87ebfeb3ebf2980f00dd4a3e5885555932419c1292b4ad840
-Description: Termux Android MCP Bridge with OpenAI Secure Tunnel helper
- Installs the MCP bridge as a real Termux package under $PREFIX,
- with commands for setup, start, status, audit handling and tunnel setup.
+Depends: nodejs-lts, ca-certificates
+Filename: ./termux-android-bridge_0.3.0_all.deb
+Size: 10208
+MD5sum: f63d59a226df8beb092f1c4de184825a
+SHA1: 5825995f00f07e74877f9124e12375f184c3f16a
+SHA256: a82a15eddd83c29267ee1c291d7c02746314c3e174b200716b479bfee20d9fe0
+Section: misc
+Priority: optional
+Description: Persistent Termux Android remote bridge for MCP relay
+ Maintains an authenticated outbound WebSocket connection to a public relay,
+ executes approved MCP tool requests in Termux, and stores AuditAi reports in
+ Android Documents. No OpenAI Runtime API key is used for device transport.
 
