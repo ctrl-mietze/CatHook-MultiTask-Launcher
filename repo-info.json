@@ -1,0 +1,8 @@
+{
+  "name": "CatHook Termux Repository",
+  "channel": "stable",
+  "branch": "termux-repo",
+  "packages": {
+    "termux-android-bridge": "0.2.0"
+  }
+}
