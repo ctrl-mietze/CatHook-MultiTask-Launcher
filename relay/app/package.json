@@ -1,0 +1,16 @@
+{
+  "name": "termux-android-remote-bridge",
+  "version": "0.3.3",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "build:deb": "bash scripts/build-deb.sh"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7",
+    "ws": "^8.18.3"
+  }
+}

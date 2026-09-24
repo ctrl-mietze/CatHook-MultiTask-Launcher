@@ -1,8 +1,15 @@
 FROM node:22-bookworm-slim
 WORKDIR /app
-COPY relay-src-0.3.3.tar.gz /tmp/relay-src.tar.gz
-RUN tar -xzf /tmp/relay-src.tar.gz -C /app \
- && npm install --omit=dev --no-audit --no-fund \
- && rm -f /tmp/relay-src.tar.gz
+
+COPY app/package.json /app/package.json
+RUN npm install --omit=dev --no-audit --no-fund
+
+COPY app/ /app/
+
+RUN node --check /app/src/server.mjs \
+ && node --check /app/src/store.mjs \
+ && node --check /app/src/mcp.mjs \
+ && node --check /app/src/deviceHub.mjs
+
 ENV NODE_ENV=production
 CMD ["node","src/server.mjs"]
